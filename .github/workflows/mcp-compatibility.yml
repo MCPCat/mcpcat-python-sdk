@@ -1,0 +1,119 @@
+name: MCP Version Compatibility Testing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run weekly to catch new MCP versions
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  discover-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      mcp-versions: ${{ steps.get-versions.outputs.versions }}
+    
+    steps:
+    - name: Get available MCP versions
+      id: get-versions
+      run: |
+        # Get all available versions from PyPI
+        versions=$(pip index versions mcp 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | sort -V)
+        
+        # Filter to versions >= 1.2.0 and get only latest patch version for each minor
+        declare -A latest_minor
+        for version in $versions; do
+          major=$(echo $version | cut -d. -f1)
+          minor=$(echo $version | cut -d. -f2)
+          patch=$(echo $version | cut -d. -f3)
+          
+          # Include if version >= 1.2.0
+          if [ "$major" -gt 1 ] || ([ "$major" -eq 1 ] && [ "$minor" -ge 2 ]); then
+            minor_key="$major.$minor"
+            latest_minor[$minor_key]="$version"
+          fi
+        done
+        
+        # Create JSON array from latest versions
+        filtered_versions=()
+        for version in "${latest_minor[@]}"; do
+          filtered_versions+=("\"$version\"")
+        done
+        
+        json_array="[$(IFS=,; echo "${filtered_versions[*]}")]"
+        echo "Found MCP versions: $json_array"
+        echo "versions=$json_array" >> $GITHUB_OUTPUT
+
+  test-compatibility:
+    runs-on: ubuntu-latest
+    needs: discover-versions
+    strategy:
+      matrix:
+        mcp-version: ${{ fromJson(needs.discover-versions.outputs.mcp-versions) }}
+      fail-fast: false
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+    
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Update pyproject.toml with MCP ${{ matrix.mcp-version }}
+      run: |
+        # Replace the whole quoted string, preserving the trailing comma
+        sed -i -E 's/"mcp==[^"]+"/"mcp==${{ matrix.mcp-version }}"/' pyproject.toml
+        
+    - name: Install dependencies with MCP ${{ matrix.mcp-version }}
+      run: |
+        uv sync --extra dev
+    
+    - name: Run full test suite with MCP ${{ matrix.mcp-version }}
+      run: |
+        echo "Running full test suite with MCP version ${{ matrix.mcp-version }}"
+        uv run pytest tests/ -v
+  
+  report-compatibility:
+    runs-on: ubuntu-latest
+    needs: [discover-versions, test-compatibility]
+    if: always()
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Print compatibility report
+      run: |
+        echo "=========================================="
+        echo "     MCP VERSION COMPATIBILITY REPORT    "
+        echo "=========================================="
+        echo ""
+        echo "This report shows the compatibility status of MCPCat with different MCP versions."
+        echo ""
+        echo "Generated on: $(date)"
+        echo ""
+        echo "📋 TESTED VERSIONS"
+        echo "─────────────────────────────────────────"
+        echo "MCP versions tested: ${{ needs.discover-versions.outputs.mcp-versions }}"
+        echo "Python version: 3.12"
+        echo ""
+        echo "🧪 TEST COVERAGE"
+        echo "─────────────────────────────────────────"
+        echo "✓ FastMCP server compatibility"
+        echo "✓ Low-level Server compatibility"
+        echo "✓ Both implementations tested with is_compatible_server function"
+        echo ""
+        echo "📊 RESULTS"
+        echo "─────────────────────────────────────────"
+        echo "Check the individual test job results above for detailed compatibility status."
+        echo "Each MCP version was tested in a separate matrix job."
+        echo ""
+        echo "=========================================="

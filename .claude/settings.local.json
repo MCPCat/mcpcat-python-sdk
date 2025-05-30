@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(uv run pytest tests/test_get_unknown_or_stdio_session.py -v)",
+      "Bash(uv run:*)",
+      "Bash(rg:*)",
+      "Bash(/Users/naseemalnaji/.nvm/versions/node/v23.5.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"CallToolResult\" --type py -A 3 -B 3)",
+      "Bash(/Users/naseemalnaji/.nvm/versions/node/v23.5.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"from mcp.types import.*CallToolResult\" --type py)",
+      "Bash(pip show:*)",
+      "WebFetch(domain:mcpcat.io)"
+    ],
+    "deny": []
+  }
+}

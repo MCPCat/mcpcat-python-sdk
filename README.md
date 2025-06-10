@@ -13,6 +13,8 @@
     <a href="https://mcpcat.io">Website</a>
     <span> · </span>
     <a href="#free-for-open-source">Open Source</a>
+    <span> · </span>
+    <a href="https://discord.gg/n9qpyhzp2u">Discord</a>
 </h3>
 <p align="center">
   <a href="https://badge.fury.io/py/mcpcat"><img src="https://badge.fury.io/py/mcpcat.svg" alt="PyPI version"></a>

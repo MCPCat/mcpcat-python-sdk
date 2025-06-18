@@ -12,6 +12,8 @@
     <span> · </span>
     <a href="https://mcpcat.io">Website</a>
     <span> · </span>
+    <a href="https://docs.mcpcat.io">Docs</a>
+    <span> · </span>
     <a href="#free-for-open-source">Open Source</a>
     <span> · </span>
     <a href="https://discord.gg/n9qpyhzp2u">Discord</a>
@@ -47,7 +49,7 @@ Use MCPcat for:
 
 ## Getting Started
 
-To get started with MCPcat, first create an account and obtain your project ID by signing up at [mcpcat.io](https://mcpcat.io).
+To get started with MCPcat, first create an account and obtain your project ID by signing up at [mcpcat.io](https://mcpcat.io). For detailed setup instructions visit our [documentation](https://docs.mcpcat.io).
 
 Once you have your project ID, integrate MCPcat into your MCP server:
 

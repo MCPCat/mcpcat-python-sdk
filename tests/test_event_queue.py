@@ -602,16 +602,25 @@ def test_shutdown_handlers_registered(mock_atexit, mock_signal):
     assert mock_atexit.called
 
 
+@patch('os._exit')
+@patch('mcpcat.modules.event_queue.signal.signal')
 @patch('mcpcat.modules.event_queue.event_queue')
-def test_shutdown_handler_function(mock_event_queue):
+def test_shutdown_handler_function(mock_event_queue, mock_signal, mock_exit):
     """Test the _shutdown_handler function."""
     from mcpcat.modules.event_queue import _shutdown_handler
     
-    # Call the shutdown handler
-    _shutdown_handler()
+    # Call the shutdown handler with proper signal handler arguments
+    _shutdown_handler(signal.SIGINT, None)
+    
+    # Verify signal handlers are reset to default
+    mock_signal.assert_any_call(signal.SIGINT, signal.SIG_DFL)
+    mock_signal.assert_any_call(signal.SIGTERM, signal.SIG_DFL)
     
     # Verify it calls destroy on the event queue
     mock_event_queue.destroy.assert_called_once()
+    
+    # Verify it exits with code 0
+    mock_exit.assert_called_once_with(0)
 
 
 @patch('sys.version_info', (3, 8, 0))

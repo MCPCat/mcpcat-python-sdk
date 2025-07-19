@@ -65,7 +65,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump() if request.params else {},
+            parameters=request.params.model_dump() if request and request.params else {},
             event_type=EventType.MCP_TOOLS_LIST.value,
         )
 

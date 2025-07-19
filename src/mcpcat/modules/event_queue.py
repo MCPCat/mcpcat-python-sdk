@@ -3,6 +3,7 @@
 import atexit
 import queue
 import signal
+import os
 import threading
 import time
 from datetime import datetime, timezone
@@ -141,28 +142,46 @@ class EventQueue:
         self._shutdown = True
         self._shutdown_event.set()
 
-        # Wait for queue to drain (with timeout)
-        timeout = 5.0  # 5 seconds
-        start = time.time()
+        # Determine wait time based on queue state
+        if self.queue.qsize() > 0:
+            # If there are events in queue, wait 5 seconds
+            wait_time = 5.0
+            write_to_log(f"Shutting down with {self.queue.qsize()} events in queue, waiting up to {wait_time}s")
+        else:
+            # If queue is empty, just wait 1 second for in-flight requests
+            wait_time = 1.0
+            write_to_log(f"Queue empty, waiting {wait_time}s for in-flight requests")
 
-        while self.queue.qsize() > 0 and time.time() - start < timeout:
-            time.sleep(0.1)
+        # Wait for the specified time
+        time.sleep(wait_time)
 
-        # Shutdown executor
-        # Note: timeout parameter was added in Python 3.9 but removed in later versions
+        # Shutdown executor (this will wait for running tasks to complete)
         self.executor.shutdown()
 
-        if self.queue.qsize() > 0:
-            write_to_log(f"Shutting down with {self.queue.qsize()} events still in queue")
+        # Log final status
+        remaining = self.queue.qsize()
+        if remaining > 0:
+            write_to_log(f"Shutdown complete. {remaining} events were not processed.")
 
 
 # Global event queue instance
 event_queue = EventQueue()
 
 
-def _shutdown_handler(*_):
+def _shutdown_handler(signum, frame):
     """Handle shutdown signals."""
+    
+    write_to_log("Received shutdown signal, gracefully shutting down...")
+    
+    # Reset signal handlers to default behavior to avoid recursive calls
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    
+    # Perform graceful shutdown
     event_queue.destroy()
+    
+    # Force exit after graceful shutdown
+    os._exit(0)
 
 
 def set_event_queue(new_queue: EventQueue) -> None:

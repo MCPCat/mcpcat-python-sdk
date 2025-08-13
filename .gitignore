@@ -147,3 +147,4 @@ cython_debug/
 uv.lock
 CLAUDE.md
 .claude/
+.serena/

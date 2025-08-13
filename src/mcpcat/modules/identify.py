@@ -16,15 +16,22 @@ def identify_session(server, request: any, context: any) -> None:
     """
     Identify the user based on the request and context.
     
-    This function should be implemented by the user to provide custom identification logic.
+    Calls the user-defined identify function with the full request and context objects.
+    The context may contain transport-specific information (e.g., HTTP headers for SSE/WebSocket transports).
     
+    :param server: The MCP server instance.
     :param request: The request data containing user information.
-    :param context: The context in which the request is made.
+    :param context: The full context object which may include transport-specific data.
     :return: An instance of UserIdentity or None if identification fails.
     """
     data = get_server_tracking_data(server)
 
     if not data or not data.options or not data.options.identify:
+        return
+    
+    # Handle None context (e.g., in stateless HTTP mode outside handlers)
+    if context is None:
+        write_to_log("Context is None, skipping user identification")
         return
     
     if data.identified_sessions.get(data.session_id):

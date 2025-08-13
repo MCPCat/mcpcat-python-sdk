@@ -144,17 +144,23 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             resource_name=tool_name,
         )
 
+        # Extract user intent from context (but don't pop yet - we need it for the event)
+        if data.options.enable_tool_call_context and tool_name != "get_more_tools":
+            event.user_intent = arguments.get("context", None)
+        elif tool_name == "get_more_tools":
+            # For get_more_tools, context is the actual parameter
+            event.user_intent = arguments.get("context", None)
+        
         # Handle report_missing tool directly
         if tool_name == "get_more_tools":
             result = await handle_report_missing(arguments)
             event.response = result.model_dump() if result else None
-            event.user_intent = arguments.pop("context", None)
             event_queue.publish_event(server, event)
             return result
 
-        # Extract MCPCat context if enabled
+        # Now pop context from arguments before calling the original handler
         if data.options.enable_tool_call_context:
-            event.user_intent = arguments.pop("context", None)
+            arguments.pop("context", None)
             # Log warning if context is missing and tool is not report_missing
             if event.user_intent is None and tool_name != "get_more_tools":
                 write_to_log(f"Tool '{tool_name}' called without context. mcpcat.track() might have been called BEFORE tool initialization.")
@@ -185,3 +191,60 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
     server.request_handlers[CallToolRequest] = wrapped_call_tool_handler
     server.request_handlers[ListToolsRequest] = wrapped_list_tools_handler
     server.request_handlers[InitializeRequest] = wrapped_initialize_handler
+
+
+def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> None:
+    """Set up minimal handlers for FastMCP servers (non-tool events only).
+    
+    This is used for FastMCP servers where tool tracking is handled by monkey-patching.
+    We only need to track initialize and other non-tool events.
+    """
+    # Store original request handlers
+    original_initialize_handler = server.request_handlers.get(InitializeRequest)
+    original_list_tools_handler = server.request_handlers.get(ListToolsRequest)
+
+    async def wrapped_initialize_handler(request: InitializeRequest) -> ServerResult:
+        """Intercept initialize requests to add MCPCat data to the request context."""
+        session_id = get_server_session_id(server)
+        request_context = safe_request_context(server)
+        identify_session(server, request, request_context)
+        event = UnredactedEvent(
+            session_id=session_id,
+            timestamp=datetime.now(timezone.utc),
+            parameters=request.params.model_dump() if request.params else {},
+            event_type=EventType.MCP_INITIALIZE.value,
+        )
+
+        # Call the original handler
+        result = await original_initialize_handler(request)
+
+        # Record the event
+        event.response = result.model_dump() if result else None
+        event_queue.publish_event(server, event)
+        return result
+
+    async def wrapped_list_tools_handler(request: ListToolsRequest) -> ServerResult:
+        """Intercept list_tools requests to track the event (tool modifications handled by monkey-patch)."""
+        session_id = get_server_session_id(server)
+        request_context = safe_request_context(server)
+        get_client_info_from_request_context(server, request_context)
+        identify_session(server, request, request_context)
+        event = UnredactedEvent(
+            session_id=session_id,
+            timestamp=datetime.now(timezone.utc),
+            parameters=request.params.model_dump() if request and request.params else {},
+            event_type=EventType.MCP_TOOLS_LIST.value,
+        )
+
+        # Call the original handler - tool modifications are handled by monkey-patch
+        result = await original_list_tools_handler(request)
+        
+        # Record the event
+        event.response = result.model_dump() if result else None
+        event_queue.publish_event(server, event)
+        return result
+
+    # Only override initialize and list_tools for event tracking
+    # Tool call tracking is handled by monkey-patching for FastMCP
+    server.request_handlers[InitializeRequest] = wrapped_initialize_handler
+    server.request_handlers[ListToolsRequest] = wrapped_list_tools_handler

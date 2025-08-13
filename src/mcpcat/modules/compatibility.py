@@ -21,7 +21,37 @@ class MCPServerProtocol(Protocol):
 def is_fastmcp_server(server: Any) -> bool:
     """Check if the server is a FastMCP instance."""
     # Check for FastMCP class name or specific attributes
-    return hasattr(server, "_mcp_server")
+    # A FastMCP server should have both _mcp_server and _tool_manager
+    return hasattr(server, "_mcp_server") and hasattr(server, "_tool_manager")
+
+def has_required_fastmcp_attributes(server: Any) -> bool:
+    """Check if a FastMCP server has all required attributes for monkey patching.
+    
+    This validates that the server has all the attributes that monkey_patch.py expects.
+    """
+    # Check for _tool_manager and its required methods
+    if not hasattr(server, "_tool_manager"):
+        return False
+    
+    tool_manager = server._tool_manager
+    required_tool_manager_methods = ["add_tool", "call_tool", "list_tools"]
+    for method in required_tool_manager_methods:
+        if not hasattr(tool_manager, method) or not callable(getattr(tool_manager, method)):
+            return False
+    
+    # Check for _tools dict on tool_manager (used for tracking existing tools)
+    if not hasattr(tool_manager, "_tools") or not isinstance(tool_manager._tools, dict):
+        return False
+    
+    # Check for add_tool method on the server itself (used for adding get_more_tools)
+    if not hasattr(server, "add_tool") or not callable(server.add_tool):
+        return False
+    
+    # Check for _mcp_server (used for event tracking and session management)
+    if not hasattr(server, "_mcp_server"):
+        return False
+    
+    return True
 
 def has_neccessary_attributes(server: Any) -> bool:
     """Check if the server has necessary attributes for compatibility."""
@@ -32,9 +62,13 @@ def has_neccessary_attributes(server: Any) -> bool:
         if not hasattr(server, method):
             return False
     
-    # For FastMCP servers, verify internal MCP server exists
-    if hasattr(server, "_mcp_server"):
-        # FastMCP server - check that internal MCP server has request_context
+    # For FastMCP servers, verify all required attributes for monkey patching
+    if is_fastmcp_server(server):
+        # Use the comprehensive FastMCP validation
+        if not has_required_fastmcp_attributes(server):
+            return False
+        
+        # Additional checks for request handling
         # Use dir() to avoid triggering property getters that might raise exceptions
         if "request_context" not in dir(server._mcp_server):
             return False

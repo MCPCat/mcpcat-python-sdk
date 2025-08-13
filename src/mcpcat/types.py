@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional, TypedDict
+from typing import Any, Dict, Optional, Set, TypedDict
 from mcpcat_api import PublishEventRequest
 from pydantic import BaseModel
 
@@ -60,6 +60,14 @@ class UnredactedEvent(Event):
     redaction_fn: RedactionFunction | None = None
 
 @dataclass
+class ToolRegistration:
+    """Metadata about a registered tool."""
+    name: str
+    registered_at: datetime
+    tracked: bool = False
+    wrapped: bool = False
+
+@dataclass
 class MCPCatOptions:
     """Configuration options for MCPCat."""
     enable_report_missing: bool = True
@@ -77,3 +85,9 @@ class MCPCatData:
     last_activity: datetime
     identified_sessions: dict[str, UserIdentity]
     options: MCPCatOptions
+    
+    # Dynamic tracking fields (initialized on demand)
+    tool_registry: Dict[str, ToolRegistration] = field(default_factory=dict)
+    wrapped_tools: Set[str] = field(default_factory=set)
+    tracker_initialized: bool = False
+    monkey_patched: bool = False

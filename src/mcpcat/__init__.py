@@ -33,7 +33,8 @@ def track(server: Any, project_id: str, options: MCPCatOptions | None = None) ->
         )
 
     lowlevel_server = server
-    if is_fastmcp_server(server):
+    is_fastmcp = is_fastmcp_server(server)
+    if is_fastmcp:
         lowlevel_server = server._mcp_server
 
     # Create and store tracking data
@@ -50,10 +51,31 @@ def track(server: Any, project_id: str, options: MCPCatOptions | None = None) ->
     set_server_tracking_data(lowlevel_server, data)
 
     try:
-        override_lowlevel_mcp_server(lowlevel_server, data)
-        write_to_log(f"MCPCat initialized for sessions {session_id} on project {project_id}")
+        # Always initialize dynamic tracking for complete tool coverage
+        from mcpcat.modules.overrides.monkey_patch import apply_monkey_patches
+        
+        # Initialize the dynamic tracking system by setting the flag
+        if not data.tracker_initialized:
+            data.tracker_initialized = True
+            from mcpcat.modules.logging import write_to_log
+            write_to_log(f"Dynamic tracking initialized for server {id(lowlevel_server)}")
+        
+        # Apply appropriate tracking method based on server type
+        if is_fastmcp:
+            # For FastMCP servers, use monkey-patching for tool tracking
+            apply_monkey_patches(server, data)
+            # Only apply minimal overrides for non-tool events (like initialize, list_tools display)
+            from mcpcat.modules.overrides.mcp_server import override_lowlevel_mcp_server_minimal
+            override_lowlevel_mcp_server_minimal(lowlevel_server, data)
+        else:
+            # For low-level servers, use the traditional overrides (no monkey patching needed)
+            override_lowlevel_mcp_server(lowlevel_server, data)
+        
+        write_to_log(f"MCPCat initialized with dynamic tracking for session {session_id} on project {project_id}")
+            
     except Exception as e:
         write_to_log(f"Error initializing MCPCat: {e}")
+        
     return server
 
 __all__ = [

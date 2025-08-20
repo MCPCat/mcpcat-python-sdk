@@ -63,7 +63,9 @@ class EventQueue:
             self.queue.put_nowait(event)
         except queue.Full:
             # Queue is full, drop the new event
-            write_to_log(f"Event queue full, dropping event {event.id or 'unknown'} of type {event.event_type}")
+            write_to_log(
+                f"Event queue full, dropping event {event.id or 'unknown'} of type {event.event_type}"
+            )
 
     def _worker(self) -> None:
         """Worker thread that processes events from the queue."""
@@ -82,7 +84,9 @@ class EventQueue:
                     try:
                         self.queue.put_nowait(event)
                     except queue.Full:
-                        write_to_log(f"Could not requeue event {event.id or 'unknown'} - queue full")
+                        write_to_log(
+                            f"Could not requeue event {event.id or 'unknown'} - queue full"
+                        )
 
             except queue.Empty:
                 continue
@@ -103,25 +107,30 @@ class EventQueue:
                 event = redacted_event
                 event.redaction_fn = None  # Clear the function to avoid reprocessing
             except Exception as error:
-                write_to_log(f"WARNING: Dropping event {event.id or 'unknown'} due to redaction failure: {error}")
+                write_to_log(
+                    f"WARNING: Dropping event {event.id or 'unknown'} due to redaction failure: {error}"
+                )
                 return  # Skip this event if redaction fails
 
         if event:
             event.id = event.id or generate_prefixed_ksuid("evt")
 
-            # Export to telemetry backends if configured (non-blocking)
+            # Send to MCPCat API only if project_id exists
+            if event.project_id:
+                self._send_event(event)
+
+            # Export to telemetry backends if configured
             if _telemetry_manager:
                 try:
                     _telemetry_manager.export(event)
                 except Exception as e:
                     write_to_log(f"Telemetry export submission failed: {e}")
 
-            # Send to MCPCat API only if project_id exists
-            if event.project_id:
-                self._send_event(event)
             elif not _telemetry_manager:
                 # Only warn if we have neither MCPCat nor telemetry configured
-                write_to_log("Warning: Event has no project_id and no telemetry exporters configured")
+                write_to_log(
+                    "Warning: Event has no project_id and no telemetry exporters configured"
+                )
 
     def _send_event(self, event: Event, retries: int = 0) -> None:
         """Send event to API."""
@@ -142,7 +151,9 @@ class EventQueue:
                 time.sleep(2**retries)
                 self._send_event(event, retries + 1)
             else:
-                write_to_log(f"Failed to send event {event.id} after {self.max_retries} retries")
+                write_to_log(
+                    f"Failed to send event {event.id} after {self.max_retries} retries"
+                )
 
     def get_stats(self) -> dict[str, Any]:
         """Get queue stats for monitoring."""
@@ -162,7 +173,9 @@ class EventQueue:
         if self.queue.qsize() > 0:
             # If there are events in queue, wait 5 seconds
             wait_time = 5.0
-            write_to_log(f"Shutting down with {self.queue.qsize()} events in queue, waiting up to {wait_time}s")
+            write_to_log(
+                f"Shutting down with {self.queue.qsize()} events in queue, waiting up to {wait_time}s"
+            )
         else:
             # If queue is empty, just wait 1 second for in-flight requests
             wait_time = 1.0
@@ -181,10 +194,10 @@ class EventQueue:
 
 
 # Global telemetry manager instance (optional)
-_telemetry_manager: Optional['TelemetryManager'] = None
+_telemetry_manager: Optional["TelemetryManager"] = None
 
 
-def set_telemetry_manager(manager: Optional['TelemetryManager']) -> None:
+def set_telemetry_manager(manager: Optional["TelemetryManager"]) -> None:
     """
     Set the global telemetry manager instance.
 
@@ -194,7 +207,9 @@ def set_telemetry_manager(manager: Optional['TelemetryManager']) -> None:
     global _telemetry_manager
     _telemetry_manager = manager
     if manager:
-        write_to_log(f"Telemetry manager set with {manager.get_exporter_count()} exporter(s)")
+        write_to_log(
+            f"Telemetry manager set with {manager.get_exporter_count()} exporter(s)"
+        )
 
 
 # Global event queue instance
@@ -235,14 +250,18 @@ def publish_event(server: Any, event: UnredactedEvent) -> None:
     """Publish an event to the queue."""
     if not event.duration:
         if event.timestamp:
-            event.duration = int((datetime.now(timezone.utc).timestamp() - event.timestamp.timestamp()) * 1000)
+            event.duration = int(
+                (datetime.now(timezone.utc).timestamp() - event.timestamp.timestamp())
+                * 1000
+            )
         else:
             event.duration = None
 
-
     data = get_server_tracking_data(server)
     if not data:
-        write_to_log("Warning: Server tracking data not found. Event will not be published.")
+        write_to_log(
+            "Warning: Server tracking data not found. Event will not be published."
+        )
         return
 
     session_info = get_session_info(server, data)
@@ -254,7 +273,9 @@ def publish_event(server: Any, event: UnredactedEvent) -> None:
 
     # Merge data, ensuring project_id from data takes precedence
     merged_data = {**event_data, **session_data}
-    merged_data['project_id'] = data.project_id  # Override with tracking data's project_id
+    merged_data["project_id"] = (
+        data.project_id
+    )  # Override with tracking data's project_id
 
     full_event = UnredactedEvent(
         **merged_data,

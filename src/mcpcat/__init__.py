@@ -21,10 +21,32 @@ from .types import (
 )
 
 
-def track(server: Any, project_id: str, options: MCPCatOptions | None = None) -> Any:
+def track(server: Any, project_id: str | None = None, options: MCPCatOptions | None = None) -> Any:
+    """
+    Initialize MCPCat tracking with optional telemetry export.
+
+    Args:
+        server: MCP server instance to track
+        project_id: MCPCat project ID (optional if using telemetry-only mode)
+        options: Configuration options including telemetry exporters
+
+    Returns:
+        The server instance with tracking enabled
+
+    Raises:
+        ValueError: If neither project_id nor exporters are provided
+        TypeError: If server is not a compatible MCP server instance
+    """
     # Use default options if not provided
     if options is None:
         options = MCPCatOptions()
+
+    # Validate configuration
+    if not project_id and not options.exporters:
+        raise ValueError(
+            "Either project_id or exporters must be provided. "
+            "Use project_id for MCPCat, exporters for telemetry-only mode, or both."
+        )
 
     # Validate server compatibility
     if not is_compatible_server(server):
@@ -36,6 +58,15 @@ def track(server: Any, project_id: str, options: MCPCatOptions | None = None) ->
     is_fastmcp = is_fastmcp_server(server)
     if is_fastmcp:
         lowlevel_server = server._mcp_server
+
+    # Initialize telemetry if exporters configured
+    if options.exporters:
+        from mcpcat.modules.telemetry import TelemetryManager
+        from mcpcat.modules.event_queue import set_telemetry_manager
+
+        telemetry_manager = TelemetryManager(options.exporters)
+        set_telemetry_manager(telemetry_manager)
+        write_to_log(f"Telemetry initialized with {len(options.exporters)} exporter(s)")
 
     # Create and store tracking data
     session_id = new_session_id()
@@ -53,13 +84,12 @@ def track(server: Any, project_id: str, options: MCPCatOptions | None = None) ->
     try:
         # Always initialize dynamic tracking for complete tool coverage
         from mcpcat.modules.overrides.monkey_patch import apply_monkey_patches
-        
+
         # Initialize the dynamic tracking system by setting the flag
         if not data.tracker_initialized:
             data.tracker_initialized = True
-            from mcpcat.modules.logging import write_to_log
             write_to_log(f"Dynamic tracking initialized for server {id(lowlevel_server)}")
-        
+
         # Apply appropriate tracking method based on server type
         if is_fastmcp:
             # For FastMCP servers, use monkey-patching for tool tracking
@@ -70,12 +100,15 @@ def track(server: Any, project_id: str, options: MCPCatOptions | None = None) ->
         else:
             # For low-level servers, use the traditional overrides (no monkey patching needed)
             override_lowlevel_mcp_server(lowlevel_server, data)
-        
-        write_to_log(f"MCPCat initialized with dynamic tracking for session {session_id} on project {project_id}")
-            
+
+        if project_id:
+            write_to_log(f"MCPCat initialized with dynamic tracking for session {session_id} on project {project_id}")
+        else:
+            write_to_log(f"MCPCat initialized in telemetry-only mode for session {session_id}")
+
     except Exception as e:
         write_to_log(f"Error initializing MCPCat: {e}")
-        
+
     return server
 
 __all__ = [

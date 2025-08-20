@@ -126,8 +126,8 @@ class EventQueue:
                 except Exception as e:
                     write_to_log(f"Telemetry export submission failed: {e}")
 
-            elif not _telemetry_manager:
-                # Only warn if we have neither MCPCat nor telemetry configured
+            if not event.project_id and not _telemetry_manager:
+                # Warn if we have neither MCPCat nor telemetry configured
                 write_to_log(
                     "Warning: Event has no project_id and no telemetry exporters configured"
                 )

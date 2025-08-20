@@ -170,6 +170,9 @@ class SentryExporter(Exporter):
         """
         timestamp = event.timestamp.timestamp() if event.timestamp else datetime.now().timestamp()
         trace_id = trace_context.get_trace_id(event.session_id)
+        
+        # Generate deterministic event_id for Sentry
+        event_id = trace_context.get_span_id(event.id) + trace_context.get_span_id(event.id)
 
         # Build message
         message = f"MCP {event.event_type or 'event'}: {event.resource_name}" if event.resource_name else f"MCP {event.event_type or 'event'}"
@@ -177,6 +180,7 @@ class SentryExporter(Exporter):
         return {
             "timestamp": timestamp,
             "trace_id": trace_id,
+            "event_id": event_id,
             "level": "error" if event.is_error else "info",
             "body": message,
             "attributes": self.build_log_attributes(event)
@@ -235,7 +239,7 @@ class SentryExporter(Exporter):
         """
         # Envelope header
         envelope_header = {
-            "event_id": trace_context.generate_span_id() + trace_context.generate_span_id(),
+            "event_id": log["event_id"],
             "sent_at": datetime.now(timezone.utc).isoformat()
         }
 
@@ -273,14 +277,14 @@ class SentryExporter(Exporter):
         start_timestamp = end_timestamp - (event.duration / 1000) if event.duration else end_timestamp
 
         trace_id = trace_context.get_trace_id(event.session_id)
-        span_id = trace_context.generate_span_id()
+        span_id = trace_context.get_span_id(event.id)
 
         # Build transaction name
         transaction_name = f"{event.event_type or 'mcp'} - {event.resource_name}" if event.resource_name else (event.event_type or "mcp.event")
 
         return {
             "type": "transaction",
-            "event_id": trace_context.generate_span_id() + trace_context.generate_span_id(),
+            "event_id": trace_context.get_span_id(event.id) + trace_context.get_span_id(),
             "timestamp": end_timestamp,
             "start_timestamp": start_timestamp,
             "transaction": transaction_name,
@@ -386,13 +390,13 @@ class SentryExporter(Exporter):
 
         # Use same trace context as the transaction for correlation (if available)
         trace_id = transaction["contexts"]["trace"]["trace_id"] if transaction else trace_context.get_trace_id(event.session_id)
-        span_id = trace_context.generate_span_id()
+        span_id = trace_context.get_span_id(event.id)
 
         timestamp = transaction["timestamp"] if transaction else (event.timestamp.timestamp() if event.timestamp else datetime.now().timestamp())
 
         return {
             "type": "event",
-            "event_id": trace_context.generate_span_id() + trace_context.generate_span_id(),
+            "event_id": trace_context.get_span_id(event.id) + trace_context.get_span_id(),
             "timestamp": timestamp,
             "level": "error",
             "exception": {

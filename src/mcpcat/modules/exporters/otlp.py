@@ -114,7 +114,7 @@ class OTLPExporter(Exporter):
 
         return {
             "traceId": trace_context.get_trace_id(event.session_id),
-            "spanId": trace_context.generate_span_id(),
+            "spanId": trace_context.get_span_id(event.id),
             "name": event.event_type or "mcp.event",
             "kind": 2,  # SPAN_KIND_SERVER
             "startTimeUnixNano": str(start_time_nanos),

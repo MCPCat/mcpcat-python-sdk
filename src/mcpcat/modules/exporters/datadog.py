@@ -141,8 +141,8 @@ class DatadogExporter(Exporter):
             "timestamp": timestamp_ms,
             "status": "error" if event.is_error else "info",
             "dd": {
-                "trace_id": trace_context.get_trace_id(event.session_id),
-                "span_id": trace_context.generate_span_id()
+                "trace_id": trace_context.get_datadog_trace_id(event.session_id),
+                "span_id": trace_context.get_datadog_span_id(event.id)
             },
             "mcp": {
                 "session_id": event.session_id,

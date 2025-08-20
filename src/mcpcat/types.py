@@ -112,7 +112,7 @@ class MCPCatOptions:
 @dataclass
 class MCPCatData:
     """Internal data structure for tracking."""
-    project_id: str
+    project_id: str | None
     session_id: str
     session_info: SessionInfo
     last_activity: datetime

@@ -62,13 +62,9 @@ def track(server: Any, project_id: str | None = None, options: MCPCatOptions | N
     # Initialize telemetry if exporters configured
     if options.exporters:
         from mcpcat.modules.telemetry import TelemetryManager
-        from mcpcat.modules.event_queue import event_queue, set_telemetry_manager
+        from mcpcat.modules.event_queue import set_telemetry_manager
 
-        # Share the event queue's executor for consistency
-        telemetry_manager = TelemetryManager(
-            options.exporters,
-            event_queue.executor
-        )
+        telemetry_manager = TelemetryManager(options.exporters)
         set_telemetry_manager(telemetry_manager)
         write_to_log(f"Telemetry initialized with {len(options.exporters)} exporter(s)")
 
@@ -77,7 +73,7 @@ def track(server: Any, project_id: str | None = None, options: MCPCatOptions | N
     session_info = get_session_info(lowlevel_server)
     data = MCPCatData(
         session_id=session_id,
-        project_id=project_id or "",  # Use empty string if None for compatibility
+        project_id=project_id,
         last_activity=datetime.now(timezone.utc),
         session_info=session_info,
         identified_sessions=dict(),

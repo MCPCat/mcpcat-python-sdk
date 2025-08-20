@@ -87,9 +87,9 @@ class OTLPExporter(Exporter):
             write_to_log(f"Successfully exported event to OTLP: {event.id}")
 
         except requests.exceptions.RequestException as e:
-            raise Exception(f"OTLP export failed: {e}")
+            write_to_log(f"OTLP export failed: {e}")
         except Exception as e:
-            raise Exception(f"OTLP export error: {e}")
+            write_to_log(f"OTLP export error: {e}")
 
     def _convert_to_otlp_span(self, event: Event) -> Dict[str, Any]:
         """

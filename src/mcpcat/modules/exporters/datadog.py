@@ -1,9 +1,8 @@
 """Datadog exporter for MCPCat telemetry."""
 
 import json
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 import requests
 
 from ...types import Event, DatadogExporterConfig
@@ -29,7 +28,9 @@ class DatadogExporter(Exporter):
         self.env = config.get("env", "production")
 
         # Build API endpoints based on site
-        site_clean = self.site.replace("https://", "").replace("http://", "").rstrip("/")
+        site_clean = (
+            self.site.replace("https://", "").replace("http://", "").rstrip("/")
+        )
         self.logs_url = f"https://http-intake.logs.{site_clean}/api/v2/logs"
         self.metrics_url = f"https://api.{site_clean}/api/v1/series"
 
@@ -53,17 +54,13 @@ class DatadogExporter(Exporter):
 
         # Debug: Log the metrics payload
         write_to_log(f"DatadogExporter: Metrics URL: {self.metrics_url}")
-        write_to_log(f"DatadogExporter: Metrics payload: {json.dumps({'series': metrics})}")
+        write_to_log(
+            f"DatadogExporter: Metrics payload: {json.dumps({'series': metrics})}"
+        )
 
-        # Use ThreadPoolExecutor to send both requests in parallel
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            # Submit both requests
-            logs_future = executor.submit(self._send_logs, [log])
-            metrics_future = executor.submit(self._send_metrics, metrics)
-
-            # Wait for both to complete (results will be logged in the methods)
-            logs_future.result()
-            metrics_future.result()
+        # Send logs and metrics synchronously
+        self._send_logs([log])
+        self._send_metrics(metrics)
 
     def _send_logs(self, logs: List[Dict[str, Any]]) -> None:
         """Send logs to Datadog."""
@@ -72,15 +69,17 @@ class DatadogExporter(Exporter):
                 self.logs_url,
                 headers={
                     "DD-API-KEY": self.api_key,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 json=logs,
-                timeout=10
+                timeout=10,
             )
 
             if not response.ok:
                 error_body = response.text
-                write_to_log(f"Datadog logs failed - Status: {response.status_code}, Body: {error_body}")
+                write_to_log(
+                    f"Datadog logs failed - Status: {response.status_code}, Body: {error_body}"
+                )
             else:
                 write_to_log(f"Datadog logs success - Status: {response.status_code}")
         except Exception as err:
@@ -93,18 +92,22 @@ class DatadogExporter(Exporter):
                 self.metrics_url,
                 headers={
                     "DD-API-KEY": self.api_key,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 json={"series": metrics},
-                timeout=10
+                timeout=10,
             )
 
             if not response.ok:
                 error_body = response.text
-                write_to_log(f"Datadog metrics failed - Status: {response.status_code}, Body: {error_body}")
+                write_to_log(
+                    f"Datadog metrics failed - Status: {response.status_code}, Body: {error_body}"
+                )
             else:
                 response_body = response.text
-                write_to_log(f"Datadog metrics success - Status: {response.status_code}, Body: {response_body}")
+                write_to_log(
+                    f"Datadog metrics success - Status: {response.status_code}, Body: {response_body}"
+                )
         except Exception as err:
             write_to_log(f"Datadog metrics network error: {err}")
 
@@ -131,7 +134,11 @@ class DatadogExporter(Exporter):
             tags.append("error:true")
 
         # Get timestamp in milliseconds
-        timestamp_ms = int(event.timestamp.timestamp() * 1000) if event.timestamp else int(datetime.now().timestamp() * 1000)
+        timestamp_ms = (
+            int(event.timestamp.timestamp() * 1000)
+            if event.timestamp
+            else int(datetime.now().timestamp() * 1000)
+        )
 
         log: Dict[str, Any] = {
             "message": f"{event.event_type or 'unknown'} - {event.resource_name or 'unknown'}",
@@ -142,7 +149,7 @@ class DatadogExporter(Exporter):
             "status": "error" if event.is_error else "info",
             "dd": {
                 "trace_id": trace_context.get_datadog_trace_id(event.session_id),
-                "span_id": trace_context.get_datadog_span_id(event.id)
+                "span_id": trace_context.get_datadog_span_id(event.id),
             },
             "mcp": {
                 "session_id": event.session_id,
@@ -158,14 +165,18 @@ class DatadogExporter(Exporter):
                 "server_name": event.server_name,
                 "server_version": event.server_version,
                 "is_error": event.is_error,
-                "error": event.error
-            }
+                "error": event.error,
+            },
         }
 
         # Add error at root level if it exists
         if event.is_error and event.error:
             log["error"] = {
-                "message": event.error if isinstance(event.error, str) else json.dumps(event.error)
+                "message": (
+                    event.error
+                    if isinstance(event.error, str)
+                    else json.dumps(event.error)
+                )
             }
 
         return log
@@ -183,7 +194,11 @@ class DatadogExporter(Exporter):
         metrics: List[Dict[str, Any]] = []
 
         # Get timestamp in seconds (Unix timestamp)
-        timestamp = int(event.timestamp.timestamp()) if event.timestamp else int(datetime.now().timestamp())
+        timestamp = (
+            int(event.timestamp.timestamp())
+            if event.timestamp
+            else int(datetime.now().timestamp())
+        )
 
         tags: List[str] = [f"service:{self.service}"]
 
@@ -196,29 +211,35 @@ class DatadogExporter(Exporter):
             tags.append(f"resource:{event.resource_name}")
 
         # Event count metric
-        metrics.append({
-            "metric": "mcp.events.count",
-            "type": "count",
-            "points": [[timestamp, 1]],
-            "tags": tags
-        })
+        metrics.append(
+            {
+                "metric": "mcp.events.count",
+                "type": "count",
+                "points": [[timestamp, 1]],
+                "tags": tags,
+            }
+        )
 
         # Duration metric (only if duration exists)
         if event.duration is not None:
-            metrics.append({
-                "metric": "mcp.event.duration",
-                "type": "gauge",
-                "points": [[timestamp, event.duration]],
-                "tags": tags
-            })
+            metrics.append(
+                {
+                    "metric": "mcp.event.duration",
+                    "type": "gauge",
+                    "points": [[timestamp, event.duration]],
+                    "tags": tags,
+                }
+            )
 
         # Error count metric
         if event.is_error:
-            metrics.append({
-                "metric": "mcp.errors.count",
-                "type": "count",
-                "points": [[timestamp, 1]],
-                "tags": tags
-            })
+            metrics.append(
+                {
+                    "metric": "mcp.errors.count",
+                    "type": "count",
+                    "points": [[timestamp, 1]],
+                    "tags": tags,
+                }
+            )
 
         return metrics

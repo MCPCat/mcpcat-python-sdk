@@ -1,6 +1,5 @@
 """Telemetry manager for exporting events to observability platforms."""
 
-from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Optional
 from ..types import Event, ExporterConfig, OTLPExporterConfig, DatadogExporterConfig, SentryExporterConfig
 from .exporters import Exporter
@@ -10,16 +9,14 @@ from .logging import write_to_log
 class TelemetryManager:
     """Manages telemetry exporters and coordinates event export."""
 
-    def __init__(self, exporter_configs: dict[str, ExporterConfig], executor: ThreadPoolExecutor):
+    def __init__(self, exporter_configs: dict[str, ExporterConfig]):
         """
         Initialize the telemetry manager with configured exporters.
 
         Args:
             exporter_configs: Dictionary of exporter configurations
-            executor: Thread pool executor for async exports
         """
         self.exporters: Dict[str, Exporter] = {}
-        self.executor = executor
         self._initialize_exporters(exporter_configs)
 
     def _initialize_exporters(self, configs: dict[str, ExporterConfig]) -> None:
@@ -61,7 +58,7 @@ class TelemetryManager:
 
     def export(self, event: Event) -> None:
         """
-        Export event to all configured exporters (non-blocking).
+        Export event to all configured exporters.
 
         Args:
             event: Event to export
@@ -69,9 +66,9 @@ class TelemetryManager:
         if not self.exporters:
             return
 
-        # Submit export tasks to thread pool for each exporter
+        # Export to each exporter synchronously
         for name, exporter in self.exporters.items():
-            self.executor.submit(self._safe_export, name, exporter, event)
+            self._safe_export(name, exporter, event)
 
     def _safe_export(self, name: str, exporter: Exporter, event: Event) -> None:
         """

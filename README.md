@@ -46,6 +46,7 @@ Use MCPcat for:
 
 - **User session replay** 🎬. Follow alongside your users to understand why they're using your MCP servers, what functionality you're missing, and what clients they're coming from.
 - **Trace debugging** 🔍. See where your users are getting stuck, track and find when LLMs get confused by your API, and debug sessions across all deployments of your MCP server.
+- **Existing platform support** 📊. Get logging and tracing out of the box for your existing observability platforms (OpenTelemetry, Datadog, Sentry) — eliminating the tedious work of implementing telemetry yourself.
 
 ## Getting Started
 
@@ -94,6 +95,43 @@ def redact_sync(text):
 
 mcpcat.track(server, "proj_0000000", redact_sensitive_information=redact_sync)
 ```
+
+### Existing Platform Support
+
+MCPcat seamlessly integrates with your existing observability stack, providing automatic logging and tracing without the tedious setup typically required. Export telemetry data to multiple platforms simultaneously:
+
+```python
+from mcpcat import MCPCatOptions, ExporterConfig
+
+mcpcat.track(
+    server, 
+    "proj_0000000", # Or None since MCPcat is optional when sending data to existing observability platforms
+    MCPCatOptions(
+        exporters={
+            # OpenTelemetry - works with Jaeger, Tempo, New Relic, etc.
+            "otlp": ExporterConfig(
+                type="otlp",
+                endpoint="http://localhost:4318/v1/traces"
+            ),
+            # Datadog
+            "datadog": ExporterConfig(
+                type="datadog",
+                api_key=os.getenv("DD_API_KEY"),
+                site="datadoghq.com",
+                service="my-mcp-server"
+            ),
+            # Sentry
+            "sentry": ExporterConfig(
+                type="sentry",
+                dsn=os.getenv("SENTRY_DSN"),
+                environment="production"
+            )
+        }
+    )
+)
+```
+
+Learn more about our free and open source [telemetry integrations](https://docs.mcpcat.io/telemetry/integrations).
 
 ## Free for open source
 

@@ -60,9 +60,6 @@ from mcp.server import FastMCP
 
 server = FastMCP(name="echo-mcp", version="1.0.0")
 
-# Register tools
-
-# NOTE: track() must be called *after* tools are setup
 mcpcat.track(server, "proj_0000000")
 ```
 

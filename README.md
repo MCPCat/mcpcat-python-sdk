@@ -10,9 +10,9 @@
     <span> · </span>
     <a href="#why-use-mcpcat-">Features</a>
     <span> · </span>
-    <a href="https://mcpcat.io">Website</a>
-    <span> · </span>
     <a href="https://docs.mcpcat.io">Docs</a>
+    <span> · </span>
+    <a href="https://mcpcat.io">Website</a>
     <span> · </span>
     <a href="#free-for-open-source">Open Source</a>
     <span> · </span>
@@ -31,6 +31,8 @@
 > Looking for the TypeScript SDK? Check it out here [mcpcat-typescript](https://github.com/mcpcat/mcpcat-typescript-sdk).
 
 MCPcat is an analytics platform for MCP server owners 🐱. It captures user intentions and behavior patterns to help you understand what AI users actually need from your tools — eliminating guesswork and accelerating product development all with one-line of code.
+
+This SDK also provides a free and simple way to forward telemetry like logs, traces, and errors to any Open Telemetry collector or popular tools like Datadog and Sentry. 
 
 ```bash
 pip install mcpcat
@@ -93,7 +95,7 @@ def redact_sync(text):
 mcpcat.track(server, "proj_0000000", redact_sensitive_information=redact_sync)
 ```
 
-### Existing Platform Support
+### Forwarding data to existing observability platforms
 
 MCPcat seamlessly integrates with your existing observability stack, providing automatic logging and tracing without the tedious setup typically required. Export telemetry data to multiple platforms simultaneously:
 
@@ -102,7 +104,7 @@ from mcpcat import MCPCatOptions, ExporterConfig
 
 mcpcat.track(
     server, 
-    "proj_0000000", # Or None since MCPcat is optional when sending data to existing observability platforms
+    "proj_0000000", # Or None if you just want to use the SDK to forward telemetry
     MCPCatOptions(
         exporters={
             # OpenTelemetry - works with Jaeger, Tempo, New Relic, etc.

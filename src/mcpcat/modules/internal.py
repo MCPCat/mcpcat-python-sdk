@@ -9,7 +9,9 @@ from .compatibility import is_fastmcp_server
 from .logging import write_to_log
 
 # WeakKeyDictionary to store data associated with server instances
-_server_data_map: weakref.WeakKeyDictionary[Any, MCPCatData] = weakref.WeakKeyDictionary()
+_server_data_map: weakref.WeakKeyDictionary[Any, MCPCatData] = (
+    weakref.WeakKeyDictionary()
+)
 
 # Global storage for original unpatched methods (keyed by tool_manager or handler id)
 # This is global because tool managers might be shared between servers
@@ -56,8 +58,7 @@ def register_tool(server: Any, name: str) -> None:
     data = get_server_tracking_data(server)
     if data and name not in data.tool_registry:
         data.tool_registry[name] = ToolRegistration(
-            name=name,
-            registered_at=datetime.now(timezone.utc)
+            name=name, registered_at=datetime.now(timezone.utc)
         )
         write_to_log(f"Registered tool '{name}'")
 
@@ -82,10 +83,7 @@ def get_untracked_tools(server: Any) -> List[str]:
     data = get_server_tracking_data(server)
     if not data:
         return []
-    return [
-        name for name, reg in data.tool_registry.items()
-        if not reg.tracked
-    ]
+    return [name for name, reg in data.tool_registry.items() if not reg.tracked]
 
 
 def discover_new_tools(server: Any, tools: List[Any]) -> List[str]:
@@ -93,7 +91,7 @@ def discover_new_tools(server: Any, tools: List[Any]) -> List[str]:
     data = get_server_tracking_data(server)
     if not data:
         return []
-    
+
     new_tools = []
     for tool in tools:
         if tool.name not in data.tool_registry:
@@ -121,10 +119,10 @@ def get_original_methods() -> Dict[str, Any]:
 
 def get_tool_timeline(server: Any) -> List[Dict[str, Any]]:
     """Get a timeline of tool registrations for debugging.
-    
+
     Args:
         server: MCP server instance
-        
+
     Returns:
         List of tool registration events sorted by time
     """
@@ -132,16 +130,18 @@ def get_tool_timeline(server: Any) -> List[Dict[str, Any]]:
     if not data:
         return []
     timeline = []
-    
+
     for name, reg in data.tool_registry.items():
-        timeline.append({
-            "name": name,
-            "registered_at": reg.registered_at.isoformat(),
-            "tracked": reg.tracked,
-            "wrapped": reg.wrapped
-        })
-    
+        timeline.append(
+            {
+                "name": name,
+                "registered_at": reg.registered_at.isoformat(),
+                "tracked": reg.tracked,
+                "wrapped": reg.wrapped,
+            }
+        )
+
     # Sort by registration time
     timeline.sort(key=lambda x: x["registered_at"])
-    
+
     return timeline

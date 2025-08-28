@@ -23,6 +23,7 @@ class TestEventCaptureCompleteness:
         """Set up and tear down for each test."""
         # Store original event queue
         from mcpcat.modules.event_queue import event_queue as original_queue
+
         yield
         # Restore original event queue after test
         set_event_queue(original_queue)
@@ -33,34 +34,34 @@ class TestEventCaptureCompleteness:
         # Create a mock API client
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         # Create event queue with mock
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         # Create and track server
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             # Make a tool call to generate an event
             await client.call_tool("add_todo", {"text": "Test todo"})
-            
+
             # Wait for event processing
             time.sleep(1.0)
-            
+
         # Find the tool call event
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) > 0, "No tool call event captured"
-        
+
         event = tool_events[0]
-        
+
         # Verify all basic fields are present
         assert event.project_id == "test_project"
         assert event.event_type == "mcp:tools/call"
@@ -71,7 +72,7 @@ class TestEventCaptureCompleteness:
         assert isinstance(event.duration, int)
         assert event.parameters is not None
         assert event.parameters.get("arguments") == {"text": "Test todo"}
-        
+
         # Verify event has its own ID
         assert event.id is not None
         assert event.id.startswith("evt_")
@@ -82,30 +83,30 @@ class TestEventCaptureCompleteness:
         """Test that events capture client name and version."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         # Create client with default info
         async with create_test_client(server) as client:
             # The test client sets client info during initialization
             await client.call_tool("add_todo", {"text": "Test"})
             time.sleep(1.0)
-            
+
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) > 0
-        
+
         event = tool_events[0]
-        
+
         # Client info should be captured from the test client
         assert event.client_name == "mcp"
         assert event.client_version == "0.1.0"
@@ -115,28 +116,28 @@ class TestEventCaptureCompleteness:
         """Test that events capture server name and version."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             await client.call_tool("add_todo", {"text": "Test"})
             time.sleep(1.0)
-            
+
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) > 0
-        
+
         event = tool_events[0]
-        
+
         # Server info should be captured
         assert event.server_name == "todo-server"
         assert event.server_version == None
@@ -146,28 +147,28 @@ class TestEventCaptureCompleteness:
         """Test that events capture SDK language and MCPCat version."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             await client.call_tool("add_todo", {"text": "Test"})
             time.sleep(1.0)
-            
+
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) > 0
-        
+
         event = tool_events[0]
-        
+
         # SDK info should be captured
         assert event.sdk_language is not None
         assert event.sdk_language.startswith("Python ")
@@ -178,110 +179,116 @@ class TestEventCaptureCompleteness:
         """Test that events capture user intent when tool context is enabled."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
-        options = MCPCatOptions(
-            enable_tracing=True,
-            enable_tool_call_context=True
-        )
+        options = MCPCatOptions(enable_tracing=True, enable_tool_call_context=True)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             # Call tool with context parameter
             await client.call_tool(
-                "add_todo", 
+                "add_todo",
                 {
                     "text": "Buy groceries",
-                    "context": "User wants to add a reminder to buy groceries for dinner"
-                }
+                    "context": "User wants to add a reminder to buy groceries for dinner",
+                },
             )
             time.sleep(1.0)
-            
+
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) > 0
-        
+
         event = tool_events[0]
-        
+
         # User intent should be captured from context
-        assert event.user_intent == "User wants to add a reminder to buy groceries for dinner"
-        
+        assert (
+            event.user_intent
+            == "User wants to add a reminder to buy groceries for dinner"
+        )
+
         # Context should be stripped from arguments
-        assert event.parameters["arguments"] == {"text": "Buy groceries", "context": "User wants to add a reminder to buy groceries for dinner"}
+        assert event.parameters["arguments"] == {
+            "text": "Buy groceries",
+            "context": "User wants to add a reminder to buy groceries for dinner",
+        }
 
     @pytest.mark.asyncio
     async def test_event_contains_actor_info_after_identify(self):
         """Test that events contain actor information after identify is called."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             # First call - no actor info
             await client.call_tool("add_todo", {"text": "Test 1"})
             time.sleep(0.5)
-            
+
             # Manually identify the user by setting session data
             data = get_server_tracking_data(server)
             user_identity = UserIdentity(
                 user_id="user123",
                 user_name="John Doe",
-                user_data={"email": "john@example.com", "role": "admin"}
+                user_data={"email": "john@example.com", "role": "admin"},
             )
             data.identified_sessions[data.session_id] = user_identity
             set_server_tracking_data(server, data)
-            
+
             # Second call - should have actor info
             await client.call_tool("add_todo", {"text": "Test 2"})
             time.sleep(1.0)
-            
+
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) >= 2
-        
+
         # First event should not have actor info
         first_event = tool_events[0]
         assert first_event.identify_actor_given_id is None
         assert first_event.identify_actor_name is None
         assert first_event.identify_data is None
-        
+
         # Second event should have actor info
         second_event = tool_events[1]
         assert second_event.identify_actor_given_id == "user123"
         assert second_event.identify_actor_name == "John Doe"
-        assert second_event.identify_data == {"email": "john@example.com", "role": "admin"}
+        assert second_event.identify_data == {
+            "email": "john@example.com",
+            "role": "admin",
+        }
 
     @pytest.mark.asyncio
     async def test_multiple_event_types_capture_all_fields(self):
         """Test that different event types all capture required fields."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
@@ -292,10 +299,10 @@ class TestEventCaptureCompleteness:
             await client.call_tool("add_todo", {"text": "Test"})  # mcp:tools/call
             await client.call_tool("list_todos")  # Another tool call
             time.sleep(1.0)
-            
+
         # Check all captured events
         assert len(captured_events) >= 3
-        
+
         # Verify each event has all required fields
         for event in captured_events:
             # Basic fields
@@ -304,7 +311,7 @@ class TestEventCaptureCompleteness:
             assert event.timestamp is not None
             assert event.id is not None
             assert event.id.startswith("evt_")
-            
+
             # Session info fields
             assert event.sdk_language is not None
             assert event.mcpcat_version is not None
@@ -318,31 +325,31 @@ class TestEventCaptureCompleteness:
         """Test that each event gets a unique ID."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             # Generate multiple events
             for i in range(5):
                 await client.call_tool("add_todo", {"text": f"Todo {i}"})
             time.sleep(1.0)
-            
+
         # Extract all event IDs
         event_ids = [e.id for e in captured_events]
-        
+
         # All IDs should be unique
         assert len(event_ids) == len(set(event_ids)), "Event IDs are not unique"
-        
+
         # All IDs should have proper format
         for event_id in event_ids:
             assert event_id.startswith("evt_")
@@ -353,29 +360,29 @@ class TestEventCaptureCompleteness:
         """Test that event duration is properly calculated."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             # Add a small delay in the tool to ensure measurable duration
             await client.call_tool("add_todo", {"text": "Test with duration"})
             time.sleep(1.0)
-            
+
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) > 0
-        
+
         event = tool_events[0]
-        
+
         # Duration should be present and reasonable
         assert event.duration is not None
         assert isinstance(event.duration, int)
@@ -388,30 +395,30 @@ class TestEventCaptureCompleteness:
         """Test that initialization events are captured with all fields."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         # Creating the client triggers initialization
         async with create_test_client(server) as client:
             # Just need to wait for events to be processed
             time.sleep(1.0)
-            
+
         # Find initialization event
         init_events = [e for e in captured_events if e.event_type == "mcp:initialize"]
         assert len(init_events) > 0
-        
+
         event = init_events[0]
-        
+
         # Verify all fields are present
         assert event.project_id == "test_project"
         assert event.id is not None
@@ -428,15 +435,15 @@ class TestEventCaptureCompleteness:
         """Test that custom identify function affects event actor info."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         # Custom identify function
         def custom_identify(request, server):
             # Extract user info from tool arguments
@@ -445,17 +452,14 @@ class TestEventCaptureCompleteness:
                 return UserIdentity(
                     user_id=arguments["user_id"],
                     user_name=arguments.get("user_name", "Unknown"),
-                    user_data={"source": "custom_identify"}
+                    user_data={"source": "custom_identify"},
                 )
             return None
-        
+
         server = create_todo_server()
-        options = MCPCatOptions(
-            enable_tracing=True,
-            identify=custom_identify
-        )
+        options = MCPCatOptions(enable_tracing=True, identify=custom_identify)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             # Call with user info in arguments
             await client.call_tool(
@@ -463,16 +467,16 @@ class TestEventCaptureCompleteness:
                 {
                     "text": "User-specific todo",
                     "user_id": "custom123",
-                    "user_name": "Custom User"
-                }
+                    "user_name": "Custom User",
+                },
             )
             time.sleep(1.0)
-            
+
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) > 0
-        
+
         event = tool_events[0]
-        
+
         # Should have actor info from custom identify
         assert event.identify_actor_given_id == "custom123"
         assert event.identify_actor_name == "Custom User"
@@ -483,19 +487,19 @@ class TestEventCaptureCompleteness:
         """Test that ServerResult errors are captured in the event's is_error and error fields."""
         mock_api_client = MagicMock()
         captured_events = []
-        
+
         def capture_event(publish_event_request):
             captured_events.append(publish_event_request)
-            
+
         mock_api_client.publish_event = MagicMock(side_effect=capture_event)
-        
+
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
-        
+
         server = create_todo_server()
         options = MCPCatOptions(enable_tracing=True)
         track(server, "test_project", options)
-        
+
         async with create_test_client(server) as client:
             # Try to complete a non-existent todo to trigger an error
             try:
@@ -503,18 +507,24 @@ class TestEventCaptureCompleteness:
             except Exception:
                 # The client might raise an exception, but we're interested in the event
                 pass
-            
+
             time.sleep(1.0)
-            
+
         # Find the tool call event for complete_todo
-        tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call" and e.resource_name == "complete_todo"]
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call" and e.resource_name == "complete_todo"
+        ]
         assert len(tool_events) > 0, "No complete_todo tool call event captured"
-        
+
         event = tool_events[0]
-        
+
         # Verify error fields are populated
         assert event.is_error is True, "Event should be marked as error"
         assert event.error is not None, "Event should have error details"
         assert isinstance(event.error, dict), "Error should be a dictionary"
         assert "message" in event.error, "Error should have a message"
-        assert "Todo with ID 999 not found" in event.error["message"], "Error message should contain the ValueError message"
+        assert "Todo with ID 999 not found" in event.error["message"], (
+            "Error message should contain the ValueError message"
+        )

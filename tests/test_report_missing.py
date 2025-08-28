@@ -67,9 +67,7 @@ class TestReportMissing:
         async with create_test_client(server) as client:
             result = await client.call_tool(
                 "get_more_tools",
-                {
-                    "context": "Need a tool to translate text between languages"
-                }
+                {"context": "Need a tool to translate text between languages"},
             )
 
             # Verify successful response
@@ -96,7 +94,7 @@ class TestReportMissing:
                 },
                 {
                     "context": "generate_chart",
-                }
+                },
             ]
 
             for params in test_cases:
@@ -118,10 +116,7 @@ class TestReportMissing:
             assert "Unfortunately" in result.content[0].text
 
             # Test with only one parameter
-            result = await client.call_tool(
-                "get_more_tools",
-                {"context": "test_tool"}
-            )
+            result = await client.call_tool("get_more_tools", {"context": "test_tool"})
             assert result.content[0].text
             assert "Unfortunately" in result.content[0].text
 
@@ -137,7 +132,7 @@ class TestReportMissing:
                 "get_more_tools",
                 {
                     "context": "Need a tool to resize images",
-                }
+                },
             )
 
             # Should still work normally
@@ -153,18 +148,12 @@ class TestReportMissing:
 
         async with create_test_client(server) as client:
             # First use a regular tool
-            add_result = await client.call_tool(
-                "add_todo",
-                {"text": "Test todo item"}
-            )
+            add_result = await client.call_tool("add_todo", {"text": "Test todo item"})
             assert "Added todo" in add_result.content[0].text
 
             # Then use report_missing
             report_result = await client.call_tool(
-                "get_more_tools",
-                {
-                    "context": "Delete a todo item"
-                }
+                "get_more_tools", {"context": "Delete a todo item"}
             )
             assert "Unfortunately" in report_result.content[0].text
 
@@ -184,7 +173,7 @@ class TestReportMissing:
             tools_to_report = [
                 ("tool1", "Description 1"),
                 ("tool2", "Description 2"),
-                ("tool3", "Description 3")
+                ("tool3", "Description 3"),
             ]
 
             for tool_name, description in tools_to_report:
@@ -192,7 +181,7 @@ class TestReportMissing:
                     "get_more_tools",
                     {
                         "context": f"{tool_name}",
-                    }
+                    },
                 )
                 # Each call should work identically
                 assert result.content[0].text
@@ -203,8 +192,7 @@ class TestReportMissing:
         """Test interaction when both report_missing and tool_context are enabled."""
         server = create_todo_server()
         options = MCPCatOptions(
-            enable_report_missing=True,
-            enable_tool_call_context=True
+            enable_report_missing=True, enable_tool_call_context=True
         )
         track(server, "test_project", options)
 
@@ -229,7 +217,9 @@ class TestReportMissing:
             # But context should be added to other tools
             assert "context" in other_tool.inputSchema.get("properties", {})
 
-    @pytest.mark.skip(reason="Creating empty low-level server is complex and already tested via FastMCP")
+    @pytest.mark.skip(
+        reason="Creating empty low-level server is complex and already tested via FastMCP"
+    )
     @pytest.mark.asyncio
     async def test_report_missing_on_server_without_tools(self):
         """Test on a server that has no tools initially."""
@@ -247,12 +237,7 @@ class TestReportMissing:
 
         async with create_test_client(server) as client:
             # Test with None values - they should be treated as empty strings
-            result = await client.call_tool(
-                "get_more_tools",
-                {
-                    "context": None
-                }
-            )
+            result = await client.call_tool("get_more_tools", {"context": None})
             # Should still return a valid response
             assert result.content[0].text
             assert "Unfortunately" in result.content[0].text
@@ -282,7 +267,8 @@ class TestReportMissing:
                 await client.call_tool(
                     "get_more_tools",
                     {
-                        "context": "Need to resize images to different dimensions",             }
+                        "context": "Need to resize images to different dimensions",
+                    },
                 )
 
                 # Give the event queue worker thread time to process
@@ -290,27 +276,38 @@ class TestReportMissing:
 
                 # Verify that publish_event was called
                 assert mock_api_client.publish_event.called
-                assert mock_api_client.publish_event.call_count >= 1  # At least one call
+                assert (
+                    mock_api_client.publish_event.call_count >= 1
+                )  # At least one call
 
                 # Find the tool call event
                 tool_call_event = None
                 for call in mock_api_client.publish_event.call_args_list:
                     event = call[1]["publish_event_request"]
-                    if event.event_type == "mcp:tools/call" and event.resource_name == "get_more_tools":
+                    if (
+                        event.event_type == "mcp:tools/call"
+                        and event.resource_name == "get_more_tools"
+                    ):
                         tool_call_event = event
                         break
 
-                assert tool_call_event is not None, "No get_more_tools tool call event found"
+                assert tool_call_event is not None, (
+                    "No get_more_tools tool call event found"
+                )
 
                 # Verify event properties
                 assert tool_call_event.project_id == "test_project"
 
                 # Verify the arguments contain our input
-                assert tool_call_event.parameters["arguments"]["context"] == "Need to resize images to different dimensions"
+                assert (
+                    tool_call_event.parameters["arguments"]["context"]
+                    == "Need to resize images to different dimensions"
+                )
 
         finally:
             # Clean up: restore original event queue
             from mcpcat.modules.event_queue import EventQueue, set_event_queue
+
             set_event_queue(EventQueue())
 
     @pytest.mark.asyncio
@@ -337,30 +334,31 @@ class TestReportMissing:
                 # Call report_missing tool
                 await client.call_tool(
                     "get_more_tools",
-                    {"context": "Need a tool to translate text between languages"}
+                    {"context": "Need a tool to translate text between languages"},
                 )
 
                 # Call a regular tool
-                await client.call_tool(
-                    "add_todo",
-                    {"text": "Test todo item"}
-                )
+                await client.call_tool("add_todo", {"text": "Test todo item"})
 
                 # Call get_more_tools again
                 await client.call_tool(
                     "get_more_tools",
-                    {"context": "Need a tool to translate text between languages"}
+                    {"context": "Need a tool to translate text between languages"},
                 )
 
                 # Allow time for processing
                 import time
+
                 time.sleep(1.0)
 
                 # Should have at least 3 tool call events (plus initialize and list_tools events)
                 assert mock_api_client.publish_event.call_count >= 3
 
                 # Get all published events
-                events = [call[1]["publish_event_request"] for call in mock_api_client.publish_event.call_args_list]
+                events = [
+                    call[1]["publish_event_request"]
+                    for call in mock_api_client.publish_event.call_args_list
+                ]
 
                 # Filter to just tool call events
                 tool_events = [e for e in events if e.event_type == "mcp:tools/call"]
@@ -370,15 +368,24 @@ class TestReportMissing:
 
                 # Verify event types and tool names
                 assert tool_events[0].resource_name == "get_more_tools"
-                assert tool_events[0].parameters["arguments"]["context"] == "Need a tool to translate text between languages"
+                assert (
+                    tool_events[0].parameters["arguments"]["context"]
+                    == "Need a tool to translate text between languages"
+                )
 
                 assert tool_events[1].resource_name == "add_todo"
-                assert tool_events[1].parameters["arguments"]["text"] == "Test todo item"
+                assert (
+                    tool_events[1].parameters["arguments"]["text"] == "Test todo item"
+                )
 
                 assert tool_events[2].resource_name == "get_more_tools"
-                assert tool_events[2].parameters["arguments"]["context"] == "Need a tool to translate text between languages"
+                assert (
+                    tool_events[2].parameters["arguments"]["context"]
+                    == "Need a tool to translate text between languages"
+                )
 
         finally:
             # Clean up: restore original event queue
             from mcpcat.modules.event_queue import EventQueue, set_event_queue
+
             set_event_queue(EventQueue())

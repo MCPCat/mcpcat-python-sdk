@@ -1,7 +1,13 @@
 """Telemetry manager for exporting events to observability platforms."""
 
 from typing import Dict, Optional
-from ..types import Event, ExporterConfig, OTLPExporterConfig, DatadogExporterConfig, SentryExporterConfig
+from ..types import (
+    Event,
+    ExporterConfig,
+    OTLPExporterConfig,
+    DatadogExporterConfig,
+    SentryExporterConfig,
+)
 from .exporters import Exporter
 from .logging import write_to_log
 
@@ -26,7 +32,9 @@ class TelemetryManager:
                 exporter = self._create_exporter(name, config)
                 if exporter:
                     self.exporters[name] = exporter
-                    write_to_log(f"Initialized telemetry exporter: {name} (type: {config['type']})")
+                    write_to_log(
+                        f"Initialized telemetry exporter: {name} (type: {config['type']})"
+                    )
             except Exception as e:
                 write_to_log(f"Failed to initialize exporter {name}: {e}")
 
@@ -45,12 +53,15 @@ class TelemetryManager:
 
         if exporter_type == "otlp":
             from .exporters.otlp import OTLPExporter
+
             return OTLPExporter(config)
         elif exporter_type == "datadog":
             from .exporters.datadog import DatadogExporter
+
             return DatadogExporter(config)
         elif exporter_type == "sentry":
             from .exporters.sentry import SentryExporter
+
             return SentryExporter(config)
         else:
             write_to_log(f"Unknown exporter type: {exporter_type}")

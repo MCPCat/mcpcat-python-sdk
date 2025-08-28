@@ -62,7 +62,7 @@ class SentryExporter(Exporter):
             ValueError: If DSN is invalid
         """
         # DSN format: protocol://publicKey@host[:port]/path/projectId
-        regex = r'^(https?):\/\/([a-f0-9]+)@([\w.-]+)(:\d+)?(\/.*)?\/(\d+)$'
+        regex = r"^(https?):\/\/([a-f0-9]+)@([\w.-]+)(:\d+)?(\/.*)?\/(\d+)$"
         match = re.match(regex, dsn)
 
         if not match:
@@ -72,9 +72,11 @@ class SentryExporter(Exporter):
             "protocol": match.group(1),
             "public_key": match.group(2),
             "host": match.group(3),
-            "port": match.group(4)[1:] if match.group(4) else None,  # Remove leading ':'
+            "port": match.group(4)[1:]
+            if match.group(4)
+            else None,  # Remove leading ':'
             "path": match.group(5) or "",
-            "project_id": match.group(6)
+            "project_id": match.group(6),
         }
 
     def export(self, event: Event) -> None:
@@ -95,15 +97,17 @@ class SentryExporter(Exporter):
                 self.endpoint,
                 headers={
                     "X-Sentry-Auth": self.auth_header,
-                    "Content-Type": "application/x-sentry-envelope"
+                    "Content-Type": "application/x-sentry-envelope",
                 },
                 data=log_envelope,
-                timeout=10
+                timeout=10,
             )
 
             if not log_response.ok:
                 error_body = log_response.text
-                write_to_log(f"Sentry log export failed - Status: {log_response.status_code}, Body: {error_body}")
+                write_to_log(
+                    f"Sentry log export failed - Status: {log_response.status_code}, Body: {error_body}"
+                )
             else:
                 write_to_log(f"Sentry log export success - Event: {event.id}")
 
@@ -112,46 +116,58 @@ class SentryExporter(Exporter):
                 transaction = self.event_to_transaction(event)
                 transaction_envelope = self.create_transaction_envelope(transaction)
 
-                write_to_log(f"SentryExporter: Sending transaction {transaction['event_id']} to Sentry")
+                write_to_log(
+                    f"SentryExporter: Sending transaction {transaction['event_id']} to Sentry"
+                )
 
                 transaction_response = self.session.post(
                     self.endpoint,
                     headers={
                         "X-Sentry-Auth": self.auth_header,
-                        "Content-Type": "application/x-sentry-envelope"
+                        "Content-Type": "application/x-sentry-envelope",
                     },
                     data=transaction_envelope,
-                    timeout=10
+                    timeout=10,
                 )
 
                 if not transaction_response.ok:
                     error_body = transaction_response.text
-                    write_to_log(f"Sentry transaction export failed - Status: {transaction_response.status_code}, Body: {error_body}")
+                    write_to_log(
+                        f"Sentry transaction export failed - Status: {transaction_response.status_code}, Body: {error_body}"
+                    )
                 else:
-                    write_to_log(f"Sentry transaction export success - Event: {event.id}")
+                    write_to_log(
+                        f"Sentry transaction export success - Event: {event.id}"
+                    )
 
             # ALWAYS send error event for Issue creation if this is an error
             if event.is_error:
                 # Use transaction if available for better context
-                transaction = self.event_to_transaction(event) if self.enable_tracing else None
+                transaction = (
+                    self.event_to_transaction(event) if self.enable_tracing else None
+                )
                 error_event = self.event_to_error_event(event, transaction)
                 error_envelope = self.create_error_envelope(error_event)
 
-                write_to_log(f"SentryExporter: Sending error event {error_event['event_id']} to Sentry for Issue creation")
+                write_to_log(
+                    f"SentryExporter: Sending error event {error_event['event_id']} to Sentry for Issue creation"
+                )
 
                 error_response = self.session.post(
                     self.endpoint,
                     headers={
                         "X-Sentry-Auth": self.auth_header,
-                        "Content-Type": "application/x-sentry-envelope"
+                        "Content-Type": "application/x-sentry-envelope",
                     },
                     data=error_envelope,
-                    timeout=10
+                    timeout=10,
                 )
 
                 if not error_response.ok:
                     error_body = error_response.text
-                    write_to_log(f"Sentry error export failed - Status: {error_response.status_code}, Body: {error_body}")
+                    write_to_log(
+                        f"Sentry error export failed - Status: {error_response.status_code}, Body: {error_body}"
+                    )
                 else:
                     write_to_log(f"Sentry error export success - Event: {event.id}")
 
@@ -168,14 +184,24 @@ class SentryExporter(Exporter):
         Returns:
             Sentry log dictionary
         """
-        timestamp = event.timestamp.timestamp() if event.timestamp else datetime.now().timestamp()
+        timestamp = (
+            event.timestamp.timestamp()
+            if event.timestamp
+            else datetime.now().timestamp()
+        )
         trace_id = trace_context.get_trace_id(event.session_id)
-        
+
         # Generate deterministic event_id for Sentry
-        event_id = trace_context.get_span_id(event.id) + trace_context.get_span_id(event.id)
+        event_id = trace_context.get_span_id(event.id) + trace_context.get_span_id(
+            event.id
+        )
 
         # Build message
-        message = f"MCP {event.event_type or 'event'}: {event.resource_name}" if event.resource_name else f"MCP {event.event_type or 'event'}"
+        message = (
+            f"MCP {event.event_type or 'event'}: {event.resource_name}"
+            if event.resource_name
+            else f"MCP {event.event_type or 'event'}"
+        )
 
         return {
             "timestamp": timestamp,
@@ -183,7 +209,7 @@ class SentryExporter(Exporter):
             "event_id": event_id,
             "level": "error" if event.is_error else "info",
             "body": message,
-            "attributes": self.build_log_attributes(event)
+            "attributes": self.build_log_attributes(event),
         }
 
     def build_log_attributes(self, event: Event) -> Dict[str, Dict[str, Any]]:
@@ -201,7 +227,10 @@ class SentryExporter(Exporter):
         if event.event_type:
             attributes["eventType"] = {"value": event.event_type, "type": "string"}
         if event.resource_name:
-            attributes["resourceName"] = {"value": event.resource_name, "type": "string"}
+            attributes["resourceName"] = {
+                "value": event.resource_name,
+                "type": "string",
+            }
         if event.server_name:
             attributes["serverName"] = {"value": event.server_name, "type": "string"}
         if event.client_name:
@@ -213,15 +242,27 @@ class SentryExporter(Exporter):
         if event.duration is not None:
             attributes["duration_ms"] = {"value": event.duration, "type": "double"}
         if event.identify_actor_given_id:
-            attributes["actorId"] = {"value": event.identify_actor_given_id, "type": "string"}
+            attributes["actorId"] = {
+                "value": event.identify_actor_given_id,
+                "type": "string",
+            }
         if event.identify_actor_name:
-            attributes["actorName"] = {"value": event.identify_actor_name, "type": "string"}
+            attributes["actorName"] = {
+                "value": event.identify_actor_name,
+                "type": "string",
+            }
         if event.user_intent:
             attributes["userIntent"] = {"value": event.user_intent, "type": "string"}
         if event.server_version:
-            attributes["serverVersion"] = {"value": event.server_version, "type": "string"}
+            attributes["serverVersion"] = {
+                "value": event.server_version,
+                "type": "string",
+            }
         if event.client_version:
-            attributes["clientVersion"] = {"value": event.client_version, "type": "string"}
+            attributes["clientVersion"] = {
+                "value": event.client_version,
+                "type": "string",
+            }
         if event.is_error is not None:
             attributes["isError"] = {"value": event.is_error, "type": "boolean"}
 
@@ -240,14 +281,14 @@ class SentryExporter(Exporter):
         # Envelope header
         envelope_header = {
             "event_id": log["event_id"],
-            "sent_at": datetime.now(timezone.utc).isoformat()
+            "sent_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Item header with ALL MANDATORY fields
         item_header = {
             "type": "log",
             "item_count": 1,  # MANDATORY - must match number of logs
-            "content_type": "application/vnd.sentry.items.log+json"  # MANDATORY - exact string
+            "content_type": "application/vnd.sentry.items.log+json",  # MANDATORY - exact string
         }
 
         # Payload with CORRECT key
@@ -256,11 +297,16 @@ class SentryExporter(Exporter):
         }
 
         # Build envelope with TRAILING NEWLINE
-        return "\n".join([
-            json.dumps(envelope_header),
-            json.dumps(item_header),
-            json.dumps(payload)
-        ]) + "\n"  # Added required trailing newline
+        return (
+            "\n".join(
+                [
+                    json.dumps(envelope_header),
+                    json.dumps(item_header),
+                    json.dumps(payload),
+                ]
+            )
+            + "\n"
+        )  # Added required trailing newline
 
     def event_to_transaction(self, event: Event) -> Dict[str, Any]:
         """
@@ -273,18 +319,29 @@ class SentryExporter(Exporter):
             Sentry transaction dictionary
         """
         # Calculate timestamps
-        end_timestamp = event.timestamp.timestamp() if event.timestamp else datetime.now().timestamp()
-        start_timestamp = end_timestamp - (event.duration / 1000) if event.duration else end_timestamp
+        end_timestamp = (
+            event.timestamp.timestamp()
+            if event.timestamp
+            else datetime.now().timestamp()
+        )
+        start_timestamp = (
+            end_timestamp - (event.duration / 1000) if event.duration else end_timestamp
+        )
 
         trace_id = trace_context.get_trace_id(event.session_id)
         span_id = trace_context.get_span_id(event.id)
 
         # Build transaction name
-        transaction_name = f"{event.event_type or 'mcp'} - {event.resource_name}" if event.resource_name else (event.event_type or "mcp.event")
+        transaction_name = (
+            f"{event.event_type or 'mcp'} - {event.resource_name}"
+            if event.resource_name
+            else (event.event_type or "mcp.event")
+        )
 
         return {
             "type": "transaction",
-            "event_id": trace_context.get_span_id(event.id) + trace_context.get_span_id(),
+            "event_id": trace_context.get_span_id(event.id)
+            + trace_context.get_span_id(),
             "timestamp": end_timestamp,
             "start_timestamp": start_timestamp,
             "transaction": transaction_name,
@@ -293,11 +350,11 @@ class SentryExporter(Exporter):
                     "trace_id": trace_id,
                     "span_id": span_id,
                     "op": event.event_type or "mcp.event",
-                    "status": "internal_error" if event.is_error else "ok"
+                    "status": "internal_error" if event.is_error else "ok",
                 }
             },
             "tags": self.build_tags(event),
-            "extra": self.build_extra(event)
+            "extra": self.build_extra(event),
         }
 
     def build_tags(self, event: Event) -> Dict[str, str]:
@@ -360,7 +417,9 @@ class SentryExporter(Exporter):
 
         return extra
 
-    def event_to_error_event(self, event: Event, transaction: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def event_to_error_event(
+        self, event: Event, transaction: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Convert MCPCat event to Sentry error event.
 
@@ -389,45 +448,65 @@ class SentryExporter(Exporter):
                     error_type = str(event.error["type"])
 
         # Use same trace context as the transaction for correlation (if available)
-        trace_id = transaction["contexts"]["trace"]["trace_id"] if transaction else trace_context.get_trace_id(event.session_id)
+        trace_id = (
+            transaction["contexts"]["trace"]["trace_id"]
+            if transaction
+            else trace_context.get_trace_id(event.session_id)
+        )
         span_id = trace_context.get_span_id(event.id)
 
-        timestamp = transaction["timestamp"] if transaction else (event.timestamp.timestamp() if event.timestamp else datetime.now().timestamp())
+        timestamp = (
+            transaction["timestamp"]
+            if transaction
+            else (
+                event.timestamp.timestamp()
+                if event.timestamp
+                else datetime.now().timestamp()
+            )
+        )
 
         return {
             "type": "event",
-            "event_id": trace_context.get_span_id(event.id) + trace_context.get_span_id(),
+            "event_id": trace_context.get_span_id(event.id)
+            + trace_context.get_span_id(),
             "timestamp": timestamp,
             "level": "error",
             "exception": {
-                "values": [{
-                    "type": error_type,
-                    "value": error_message,
-                    "mechanism": {
-                        "type": "mcp_tool_call",
-                        "handled": False
+                "values": [
+                    {
+                        "type": error_type,
+                        "value": error_message,
+                        "mechanism": {"type": "mcp_tool_call", "handled": False},
                     }
-                }]
+                ]
             },
             "contexts": {
                 "trace": {
                     "trace_id": trace_id,  # Same trace ID as transaction/log for correlation
                     "span_id": span_id,
-                    "parent_span_id": transaction["contexts"]["trace"]["span_id"] if transaction else None,  # Link to transaction span if available
-                    "op": transaction["contexts"]["trace"]["op"] if transaction else (event.event_type or "mcp.event")
+                    "parent_span_id": transaction["contexts"]["trace"]["span_id"]
+                    if transaction
+                    else None,  # Link to transaction span if available
+                    "op": transaction["contexts"]["trace"]["op"]
+                    if transaction
+                    else (event.event_type or "mcp.event"),
                 },
                 "mcp": {
                     "resource_name": event.resource_name,
                     "session_id": event.session_id,
                     "event_type": event.event_type,
-                    "user_intent": event.user_intent
-                }
+                    "user_intent": event.user_intent,
+                },
             },
             "tags": self.build_tags(event),
             "extra": self.build_extra(event),
-            "transaction": transaction["transaction"] if transaction else (
-                f"{event.event_type or 'mcp'} - {event.resource_name}" if event.resource_name else (event.event_type or "mcp.event")
-            )
+            "transaction": transaction["transaction"]
+            if transaction
+            else (
+                f"{event.event_type or 'mcp'} - {event.resource_name}"
+                if event.resource_name
+                else (event.event_type or "mcp.event")
+            ),
         }
 
     def create_transaction_envelope(self, transaction: Dict[str, Any]) -> str:
@@ -443,20 +522,20 @@ class SentryExporter(Exporter):
         # Envelope header
         envelope_header = {
             "event_id": transaction["event_id"],
-            "sent_at": datetime.now(timezone.utc).isoformat()
+            "sent_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Item header for transaction
-        item_header = {
-            "type": "transaction"
-        }
+        item_header = {"type": "transaction"}
 
         # Build envelope (newline-separated JSON)
-        return "\n".join([
-            json.dumps(envelope_header),
-            json.dumps(item_header),
-            json.dumps(transaction)
-        ])
+        return "\n".join(
+            [
+                json.dumps(envelope_header),
+                json.dumps(item_header),
+                json.dumps(transaction),
+            ]
+        )
 
     def create_error_envelope(self, error_event: Dict[str, Any]) -> str:
         """
@@ -471,19 +550,17 @@ class SentryExporter(Exporter):
         # Envelope header
         envelope_header = {
             "event_id": error_event["event_id"],
-            "sent_at": datetime.now(timezone.utc).isoformat()
+            "sent_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Item header for error event
-        item_header = {
-            "type": "event",
-            "content_type": "application/json"
-        }
+        item_header = {"type": "event", "content_type": "application/json"}
 
         # Build envelope (newline-separated JSON)
-        return "\n".join([
-            json.dumps(envelope_header),
-            json.dumps(item_header),
-            json.dumps(error_event)
-        ])
-
+        return "\n".join(
+            [
+                json.dumps(envelope_header),
+                json.dumps(item_header),
+                json.dumps(error_event),
+            ]
+        )

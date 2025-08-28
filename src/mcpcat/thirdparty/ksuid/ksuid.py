@@ -41,7 +41,9 @@ class Ksuid:
     def from_base62(cls: t.Type[SelfT], data: str) -> SelfT:
         """initializes Ksuid from base62 encoding"""
 
-        return cls.from_bytes(int.to_bytes(int(base62.decode(data)), cls.BYTES_LENGTH, "big"))
+        return cls.from_bytes(
+            int.to_bytes(int(base62.decode(data)), cls.BYTES_LENGTH, "big")
+        )
 
     @classmethod
     def from_bytes(cls: t.Type[SelfT], value: bytes) -> SelfT:
@@ -55,20 +57,32 @@ class Ksuid:
 
         return res
 
-    def __init__(self, datetime: t.Optional[datetime] = None, payload: t.Optional[bytes] = None):
+    def __init__(
+        self, datetime: t.Optional[datetime] = None, payload: t.Optional[bytes] = None
+    ):
         from datetime import datetime as datetime_lib
 
         if payload is not None and len(payload) != self.PAYLOAD_LENGTH_IN_BYTES:
             raise ByteArrayLengthException()
 
-        _payload = secrets.token_bytes(self.PAYLOAD_LENGTH_IN_BYTES) if payload is None else payload
-        datetime = datetime.astimezone(timezone.utc) if datetime is not None else datetime_lib.now(tz=timezone.utc)
+        _payload = (
+            secrets.token_bytes(self.PAYLOAD_LENGTH_IN_BYTES)
+            if payload is None
+            else payload
+        )
+        datetime = (
+            datetime.astimezone(timezone.utc)
+            if datetime is not None
+            else datetime_lib.now(tz=timezone.utc)
+        )
         self._uid = self._inner_init(datetime, _payload)
 
     def __str__(self) -> str:
         """Creates a base62 string representation"""
 
-        return base62.encode(int.from_bytes(bytes(self), "big")).zfill(self.BASE62_LENGTH)
+        return base62.encode(int.from_bytes(bytes(self), "big")).zfill(
+            self.BASE62_LENGTH
+        )
 
     def __repr__(self) -> str:
         return str(self)
@@ -99,7 +113,10 @@ class Ksuid:
 
     @property
     def timestamp(self) -> float:
-        return float(int.from_bytes(self._uid[: self.TIMESTAMP_LENGTH_IN_BYTES], "big") + EPOCH_STAMP)
+        return float(
+            int.from_bytes(self._uid[: self.TIMESTAMP_LENGTH_IN_BYTES], "big")
+            + EPOCH_STAMP
+        )
 
     @property
     def payload(self) -> bytes:
@@ -129,6 +146,7 @@ class KsuidMs(Ksuid):
     @property
     def timestamp(self) -> float:
         return (
-            float(int.from_bytes(self._uid[: self.TIMESTAMP_LENGTH_IN_BYTES], "big")) / self.TIMESTAMP_MULTIPLIER
+            float(int.from_bytes(self._uid[: self.TIMESTAMP_LENGTH_IN_BYTES], "big"))
+            / self.TIMESTAMP_MULTIPLIER
             + EPOCH_STAMP
         )

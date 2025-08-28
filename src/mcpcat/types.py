@@ -13,9 +13,11 @@ IdentifyFunction = Callable[[dict[str, Any], Any], Optional["UserIdentity"]]
 # Type alias for redaction function
 RedactionFunction = Callable[[str], str | Awaitable[str]]
 
+
 @dataclass
-class UserIdentity():
+class UserIdentity:
     """User identification data."""
+
     user_id: str
     user_name: str | None
     user_data: dict[str, str] | None
@@ -23,6 +25,7 @@ class UserIdentity():
 
 class SessionInfo(BaseModel):
     """Session information for tracking."""
+
     ip_address: Optional[str] = None
     sdk_language: Optional[str] = None
     mcpcat_version: Optional[str] = None
@@ -34,11 +37,14 @@ class SessionInfo(BaseModel):
     identify_actor_name: Optional[str] = None  # Actor name for mcpcat:identify events
     identify_data: Optional[dict[str, Any]] = None
 
+
 class Event(PublishEventRequest):
     pass
 
+
 class EventType(str, Enum):
     """MCP event types."""
+
     MCP_PING = "mcp:ping"
     MCP_INITIALIZE = "mcp:initialize"
     MCP_COMPLETION_COMPLETE = "mcp:completion/complete"
@@ -54,12 +60,15 @@ class EventType(str, Enum):
     MCP_TOOLS_LIST = "mcp:tools/list"
     MCPCAT_IDENTIFY = "mcpcat:identify"
 
+
 class UnredactedEvent(Event):
     redaction_fn: RedactionFunction | None = None
+
 
 @dataclass
 class ToolRegistration:
     """Metadata about a registered tool."""
+
     name: str
     registered_at: datetime
     tracked: bool = False
@@ -68,8 +77,10 @@ class ToolRegistration:
 
 # Telemetry Exporter Configuration Types
 
+
 class OTLPExporterConfig(TypedDict, total=False):
     """Configuration for OpenTelemetry Protocol (OTLP) exporter."""
+
     type: Literal["otlp"]
     endpoint: str  # Optional, defaults to http://localhost:4318/v1/traces
     protocol: Literal["http/protobuf", "grpc"]  # Optional, defaults to http/protobuf
@@ -79,6 +90,7 @@ class OTLPExporterConfig(TypedDict, total=False):
 
 class DatadogExporterConfig(TypedDict):
     """Configuration for Datadog exporter."""
+
     type: Literal["datadog"]
     api_key: str  # Required - Datadog API key
     site: str  # Required - Datadog site (e.g., datadoghq.com, datadoghq.eu)
@@ -88,6 +100,7 @@ class DatadogExporterConfig(TypedDict):
 
 class SentryExporterConfig(TypedDict):
     """Configuration for Sentry exporter."""
+
     type: Literal["sentry"]
     dsn: str  # Required - Sentry DSN
     environment: Optional[str]  # Optional environment name
@@ -102,16 +115,20 @@ ExporterConfig = Union[OTLPExporterConfig, DatadogExporterConfig, SentryExporter
 @dataclass
 class MCPCatOptions:
     """Configuration options for MCPCat."""
+
     enable_report_missing: bool = True
     enable_tracing: bool = True
     enable_tool_call_context: bool = True
     identify: IdentifyFunction | None = None
     redact_sensitive_information: RedactionFunction | None = None
     exporters: dict[str, ExporterConfig] | None = None
+    debug_mode: bool = True
+
 
 @dataclass
 class MCPCatData:
     """Internal data structure for tracking."""
+
     project_id: str | None
     session_id: str
     session_info: SessionInfo

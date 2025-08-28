@@ -26,15 +26,15 @@ def has_fastmcp_support() -> bool:
     version = get_mcp_version()
     if not version:
         return False
-    
+
     major, minor, _ = parse_version(version)
-    
+
     # FastMCP was introduced after version 1.1
     if major < 1:
         return False
     if major == 1 and minor <= 1:
         return False
-    
+
     return True
 
 
@@ -42,6 +42,7 @@ def can_import_fastmcp() -> bool:
     """Check if FastMCP can be imported."""
     try:
         from mcp.server import FastMCP
+
         return True
     except ImportError:
         return False

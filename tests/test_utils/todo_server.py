@@ -4,6 +4,7 @@ from mcp.server import Server
 
 try:
     from mcp.server import FastMCP
+
     HAS_FASTMCP = True
 except ImportError:
     FastMCP = None
@@ -22,7 +23,9 @@ class Todo:
 def create_todo_server():
     """Create a todo server for testing."""
     if FastMCP is None:
-        raise ImportError("FastMCP is not available in this MCP version. Use create_low_level_todo_server() instead.")
+        raise ImportError(
+            "FastMCP is not available in this MCP version. Use create_low_level_todo_server() instead."
+        )
     # Fix deprecation warning by not passing version as kwarg
     server = FastMCP("todo-server")
 

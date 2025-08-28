@@ -67,21 +67,17 @@ class OTLPExporter(Exporter):
                             {
                                 "scope": {
                                     "name": "mcpcat",
-                                    "version": event.mcpcat_version or "0.1.0"
+                                    "version": event.mcpcat_version or "0.1.0",
                                 },
-                                "spans": [span]
+                                "spans": [span],
                             }
-                        ]
+                        ],
                     }
                 ]
             }
 
             # Send to OTLP collector
-            response = self.session.post(
-                self.endpoint,
-                json=otlp_request,
-                timeout=5
-            )
+            response = self.session.post(self.endpoint, json=otlp_request, timeout=5)
             response.raise_for_status()
 
             write_to_log(f"Successfully exported event to OTLP: {event.id}")
@@ -121,8 +117,8 @@ class OTLPExporter(Exporter):
             "endTimeUnixNano": str(end_time_nanos),
             "attributes": self._get_span_attributes(event),
             "status": {
-                "code": 2 if getattr(event, 'is_error', False) else 1  # ERROR : OK
-            }
+                "code": 2 if getattr(event, "is_error", False) else 1  # ERROR : OK
+            },
         }
 
     def _get_resource_attributes(self, event: Event) -> List[Dict[str, Any]]:
@@ -138,28 +134,30 @@ class OTLPExporter(Exporter):
         attributes = []
 
         if event.server_name:
-            attributes.append({
-                "key": "service.name",
-                "value": {"stringValue": event.server_name}
-            })
+            attributes.append(
+                {"key": "service.name", "value": {"stringValue": event.server_name}}
+            )
 
         if event.server_version:
-            attributes.append({
-                "key": "service.version",
-                "value": {"stringValue": event.server_version}
-            })
+            attributes.append(
+                {
+                    "key": "service.version",
+                    "value": {"stringValue": event.server_version},
+                }
+            )
 
         # Add SDK information
-        attributes.append({
-            "key": "telemetry.sdk.name",
-            "value": {"stringValue": "mcpcat-python"}
-        })
+        attributes.append(
+            {"key": "telemetry.sdk.name", "value": {"stringValue": "mcpcat-python"}}
+        )
 
         if event.mcpcat_version:
-            attributes.append({
-                "key": "telemetry.sdk.version",
-                "value": {"stringValue": event.mcpcat_version}
-            })
+            attributes.append(
+                {
+                    "key": "telemetry.sdk.version",
+                    "value": {"stringValue": event.mcpcat_version},
+                }
+            )
 
         return attributes
 
@@ -177,63 +175,65 @@ class OTLPExporter(Exporter):
 
         # Add MCP-specific attributes
         if event.event_type:
-            attributes.append({
-                "key": "mcp.event_type",
-                "value": {"stringValue": event.event_type}
-            })
+            attributes.append(
+                {"key": "mcp.event_type", "value": {"stringValue": event.event_type}}
+            )
 
         if event.session_id:
-            attributes.append({
-                "key": "mcp.session_id",
-                "value": {"stringValue": event.session_id}
-            })
+            attributes.append(
+                {"key": "mcp.session_id", "value": {"stringValue": event.session_id}}
+            )
 
         if event.project_id:
-            attributes.append({
-                "key": "mcp.project_id",
-                "value": {"stringValue": event.project_id}
-            })
+            attributes.append(
+                {"key": "mcp.project_id", "value": {"stringValue": event.project_id}}
+            )
 
         # Add resource name (for tools, prompts, resources)
         if event.resource_name:
-            attributes.append({
-                "key": "mcp.resource_name",
-                "value": {"stringValue": event.resource_name}
-            })
+            attributes.append(
+                {
+                    "key": "mcp.resource_name",
+                    "value": {"stringValue": event.resource_name},
+                }
+            )
 
         # Add user intent if available
         if event.user_intent:
-            attributes.append({
-                "key": "mcp.user_intent",
-                "value": {"stringValue": event.user_intent}
-            })
+            attributes.append(
+                {"key": "mcp.user_intent", "value": {"stringValue": event.user_intent}}
+            )
 
         # Add actor information
         if event.identify_actor_given_id:
-            attributes.append({
-                "key": "mcp.actor_id",
-                "value": {"stringValue": event.identify_actor_given_id}
-            })
+            attributes.append(
+                {
+                    "key": "mcp.actor_id",
+                    "value": {"stringValue": event.identify_actor_given_id},
+                }
+            )
 
         if event.identify_actor_name:
-            attributes.append({
-                "key": "mcp.actor_name",
-                "value": {"stringValue": event.identify_actor_name}
-            })
+            attributes.append(
+                {
+                    "key": "mcp.actor_name",
+                    "value": {"stringValue": event.identify_actor_name},
+                }
+            )
 
         # Add client information
         if event.client_name:
-            attributes.append({
-                "key": "mcp.client_name",
-                "value": {"stringValue": event.client_name}
-            })
+            attributes.append(
+                {"key": "mcp.client_name", "value": {"stringValue": event.client_name}}
+            )
 
         if event.client_version:
-            attributes.append({
-                "key": "mcp.client_version",
-                "value": {"stringValue": event.client_version}
-            })
+            attributes.append(
+                {
+                    "key": "mcp.client_version",
+                    "value": {"stringValue": event.client_version},
+                }
+            )
 
         # Filter out empty attributes
         return [attr for attr in attributes if attr["value"].get("stringValue")]
-

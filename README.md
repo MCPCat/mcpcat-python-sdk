@@ -50,6 +50,8 @@ Use MCPcat for:
 - **Trace debugging** 🔍. See where your users are getting stuck, track and find when LLMs get confused by your API, and debug sessions across all deployments of your MCP server.
 - **Existing platform support** 📊. Get logging and tracing out of the box for your existing observability platforms (OpenTelemetry, Datadog, Sentry) — eliminating the tedious work of implementing telemetry yourself.
 
+<img width="1274" height="770" alt="mcpcat-diagram" src="https://github.com/user-attachments/assets/36615b3c-7267-4b01-a055-856105c432cb" />
+
 ## Getting Started
 
 To get started with MCPcat, first create an account and obtain your project ID by signing up at [mcpcat.io](https://mcpcat.io). For detailed setup instructions visit our [documentation](https://docs.mcpcat.io).

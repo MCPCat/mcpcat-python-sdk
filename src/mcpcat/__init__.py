@@ -21,7 +21,9 @@ from .types import (
 )
 
 
-def track(server: Any, project_id: str | None = None, options: MCPCatOptions | None = None) -> Any:
+def track(
+    server: Any, project_id: str | None = None, options: MCPCatOptions | None = None
+) -> Any:
     """
     Initialize MCPCat tracking with optional telemetry export.
 
@@ -88,28 +90,38 @@ def track(server: Any, project_id: str | None = None, options: MCPCatOptions | N
         # Initialize the dynamic tracking system by setting the flag
         if not data.tracker_initialized:
             data.tracker_initialized = True
-            write_to_log(f"Dynamic tracking initialized for server {id(lowlevel_server)}")
+            write_to_log(
+                f"Dynamic tracking initialized for server {id(lowlevel_server)}"
+            )
 
         # Apply appropriate tracking method based on server type
         if is_fastmcp:
             # For FastMCP servers, use monkey-patching for tool tracking
             apply_monkey_patches(server, data)
             # Only apply minimal overrides for non-tool events (like initialize, list_tools display)
-            from mcpcat.modules.overrides.mcp_server import override_lowlevel_mcp_server_minimal
+            from mcpcat.modules.overrides.mcp_server import (
+                override_lowlevel_mcp_server_minimal,
+            )
+
             override_lowlevel_mcp_server_minimal(lowlevel_server, data)
         else:
             # For low-level servers, use the traditional overrides (no monkey patching needed)
             override_lowlevel_mcp_server(lowlevel_server, data)
 
         if project_id:
-            write_to_log(f"MCPCat initialized with dynamic tracking for session {session_id} on project {project_id}")
+            write_to_log(
+                f"MCPCat initialized with dynamic tracking for session {session_id} on project {project_id}"
+            )
         else:
-            write_to_log(f"MCPCat initialized in telemetry-only mode for session {session_id}")
+            write_to_log(
+                f"MCPCat initialized in telemetry-only mode for session {session_id}"
+            )
 
     except Exception as e:
         write_to_log(f"Error initializing MCPCat: {e}")
 
     return server
+
 
 __all__ = [
     # Main API

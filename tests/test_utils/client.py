@@ -21,7 +21,7 @@ async def create_test_client(server: Any) -> AsyncGenerator[ClientSession, None]
 
     This creates a properly connected MCP client/server pair with full
     request context support, similar to how a real MCP connection works.
-    
+
     Note: MCP v1.2.0 doesn't support passing client_info to create_connected_server_and_client_session.
     The client_info parameter is kept for compatibility but ignored.
 
@@ -34,7 +34,7 @@ async def create_test_client(server: Any) -> AsyncGenerator[ClientSession, None]
     """
     # MCP v1.2.0 doesn't support client_info parameter
     # Default client name is "mcp" and version is "0.1.0"
-    
+
     # Handle both FastMCP and low-level Server
     if hasattr(server, "_mcp_server"):
         # FastMCP server
@@ -44,7 +44,5 @@ async def create_test_client(server: Any) -> AsyncGenerator[ClientSession, None]
             yield client
     else:
         # Low-level Server
-        async with create_connected_server_and_client_session(
-            server=server
-        ) as client:
+        async with create_connected_server_and_client_session(server=server) as client:
             yield client

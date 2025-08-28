@@ -1,4 +1,5 @@
 """Logging functionality for MCPCat."""
+
 import os
 from datetime import datetime, timezone
 
@@ -6,7 +7,7 @@ from datetime import datetime, timezone
 def write_to_log(message: str) -> None:
     timestamp = datetime.now(timezone.utc).isoformat()
     log_entry = f"[{timestamp}] {message}\n"
-    
+
     # Always use ~/mcpcat.log
     log_path = os.path.expanduser("~/mcpcat.log")
 

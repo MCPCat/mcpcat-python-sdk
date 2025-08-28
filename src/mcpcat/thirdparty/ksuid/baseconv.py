@@ -74,27 +74,27 @@ Exceptions::
 
 """
 
-__version__ = '1.2.2'
+__version__ = "1.2.2"
 
-BASE2_ALPHABET = '01'
-BASE16_ALPHABET = '0123456789ABCDEF'
-BASE36_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'
-BASE56_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz'
-BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-BASE64_ALPHABET = BASE62_ALPHABET + '-_'
+BASE2_ALPHABET = "01"
+BASE16_ALPHABET = "0123456789ABCDEF"
+BASE36_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"
+BASE56_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz"
+BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+BASE64_ALPHABET = BASE62_ALPHABET + "-_"
 
 
 class BaseConverter(object):
-    decimal_digits = '0123456789'
+    decimal_digits = "0123456789"
 
-    def __init__(self, digits, sign='-'):
+    def __init__(self, digits, sign="-"):
         self.sign = sign
         self.digits = digits
         if sign in self.digits:
-            raise ValueError('sign character found in converter base digits')
+            raise ValueError("sign character found in converter base digits")
         if len(self.digits) <= 1:
-            raise ValueError('converter base digits length too short')
+            raise ValueError("converter base digits length too short")
 
     def __repr__(self):
         data = (self.__class__.__name__, self.digits, self.sign)
@@ -113,7 +113,7 @@ class BaseConverter(object):
         if x == 0:
             res = to_digits[0]
         else:
-            res = ''
+            res = ""
             while x > 0:
                 digit = x % len(to_digits)
                 res = to_digits[digit] + res
@@ -121,7 +121,7 @@ class BaseConverter(object):
         return res
 
     def encode(self, number):
-        if str(number)[0] == '-':
+        if str(number)[0] == "-":
             neg = True
             number = str(number)[1:]
         else:
@@ -141,7 +141,7 @@ class BaseConverter(object):
 
         value = self._convert(number, self.digits, self.decimal_digits)
         if neg:
-            return '-' + value
+            return "-" + value
         return value
 
 
@@ -151,16 +151,17 @@ base36 = BaseConverter(BASE36_ALPHABET)
 base56 = BaseConverter(BASE56_ALPHABET)
 base58 = BaseConverter(BASE58_ALPHABET)
 base62 = BaseConverter(BASE62_ALPHABET)
-base64 = BaseConverter(BASE64_ALPHABET, sign='$')
+base64 = BaseConverter(BASE64_ALPHABET, sign="$")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # doctests
     import doctest
+
     doctest.testmod()
 
     # other tests
-    nums = [-10 ** 10, 10 ** 10] + list(range(-100, 100))
+    nums = [-(10**10), 10**10] + list(range(-100, 100))
     for converter in [base2, base16, base36, base56, base58, base62, base64]:
         for i in nums:
-            assert i == int(converter.decode(converter.encode(i))), '%s failed' % i
+            assert i == int(converter.decode(converter.encode(i))), "%s failed" % i

@@ -36,7 +36,7 @@ def add_context_parameter_to_schema(schema: dict[str, Any]) -> dict[str, Any]:
     # Add context parameter
     modified_schema["properties"]["context"] = {
         "type": "string",
-        "description": "Describe why you are calling this tool and how it fits into your overall task"
+        "description": "Describe why you are calling this tool and how it fits into your overall task",
     }
 
     # Add to required fields

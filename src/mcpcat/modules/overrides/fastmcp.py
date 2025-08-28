@@ -25,4 +25,5 @@ def override_fastmcp(server: Any, data: MCPCatData) -> None:
     if FastMCP is None:
         raise ImportError("FastMCP is not available in this MCP version")
     from mcp.types import CallToolResult, ListToolsResult
+
     override_lowlevel_mcp_server(server._mcp_server, data)

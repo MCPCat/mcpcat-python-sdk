@@ -71,12 +71,17 @@ class TestGetSessionInfo:
     def test_without_mcpcat_data(self):
         """Test get_session_info without MCPCat data."""
         session_info = get_session_info(self.server, None)
-        
+
         assert session_info.ip_address is None
-        assert session_info.sdk_language == f"Python {sys.version_info.major}.{sys.version_info.minor}"
+        assert (
+            session_info.sdk_language
+            == f"Python {sys.version_info.major}.{sys.version_info.minor}"
+        )
         assert session_info.mcpcat_version == get_mcpcat_version()
         assert session_info.server_name == "todo-server"
-        assert session_info.server_version is None  # FastMCP doesn't have version attribute
+        assert (
+            session_info.server_version is None
+        )  # FastMCP doesn't have version attribute
         assert session_info.client_name is None
         assert session_info.client_version is None
         assert session_info.identify_actor_given_id is None
@@ -88,23 +93,20 @@ class TestGetSessionInfo:
         data = MCPCatData(
             project_id="test_project",
             session_id="test_session",
-            session_info=SessionInfo(
-                client_name="TestClient",
-                client_version="2.0.0"
-            ),
+            session_info=SessionInfo(client_name="TestClient", client_version="2.0.0"),
             last_activity=datetime.now(timezone.utc),
             identified_sessions={},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
 
         session_info = get_session_info(self.server, data)
-        
+
         assert session_info.client_name == "TestClient"
         assert session_info.client_version == "2.0.0"
         assert session_info.identify_actor_given_id is None
         assert session_info.identify_actor_name is None
         assert session_info.identify_data is None
-        
+
         # Verify that the session_info was updated in the data object
         assert data.session_info == session_info
 
@@ -113,26 +115,26 @@ class TestGetSessionInfo:
         user_identity = UserIdentity(
             user_id="user123",
             user_name="John Doe",
-            user_data={"role": "admin", "department": "engineering"}
+            user_data={"role": "admin", "department": "engineering"},
         )
-        
+
         data = MCPCatData(
             project_id="test_project",
             session_id="test_session",
-            session_info=SessionInfo(
-                client_name="TestClient",
-                client_version="2.0.0"
-            ),
+            session_info=SessionInfo(client_name="TestClient", client_version="2.0.0"),
             last_activity=datetime.now(timezone.utc),
             identified_sessions={"test_session": user_identity},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
 
         session_info = get_session_info(self.server, data)
-        
+
         assert session_info.identify_actor_given_id == "user123"
         assert session_info.identify_actor_name == "John Doe"
-        assert session_info.identify_data == {"role": "admin", "department": "engineering"}
+        assert session_info.identify_data == {
+            "role": "admin",
+            "department": "engineering",
+        }
 
     def test_server_without_name_or_version(self):
         """Test get_session_info with a server that doesn't have name or version attributes."""
@@ -140,9 +142,9 @@ class TestGetSessionInfo:
         # Remove name and version attributes
         del mock_server.name
         del mock_server.version
-        
+
         session_info = get_session_info(mock_server, None)
-        
+
         assert session_info.server_name is None
         assert session_info.server_version is None
 
@@ -153,23 +155,22 @@ class TestGetSessionInfo:
             project_id="test_project",
             session_id="test_session",
             session_info=SessionInfo(
-                client_name="TrackedClient",
-                client_version="3.0.0"
+                client_name="TrackedClient", client_version="3.0.0"
             ),
             last_activity=datetime.now(timezone.utc),
             identified_sessions={},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
-        
+
         # Store data using set_server_tracking_data
         set_server_tracking_data(self.server, data)
-        
+
         # When called without data, get_session_info returns basic info only
         session_info_no_data = get_session_info(self.server, None)
         assert session_info_no_data.client_name is None
         assert session_info_no_data.client_version is None
         assert session_info_no_data.server_name == "todo-server"
-        
+
         # When called with data, get_session_info uses and updates that data
         session_info_with_data = get_session_info(self.server, data)
         assert session_info_with_data.client_name == "TrackedClient"
@@ -187,23 +188,23 @@ class TestSetLastActivity:
     def test_updates_last_activity(self):
         """Test that set_last_activity updates the last activity timestamp."""
         initial_time = datetime.now(timezone.utc)
-        
+
         data = MCPCatData(
             project_id="test_project",
             session_id="test_session",
             session_info=SessionInfo(),
             last_activity=initial_time,
             identified_sessions={},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
 
         # Set up the server with tracking data
         set_server_tracking_data(self.server, data)
-        
+
         # Move time forward
         with freeze_time(initial_time + timedelta(minutes=5)):
             set_last_activity(self.server)
-            
+
         # Verify the timestamp was updated
         assert data.last_activity > initial_time
 
@@ -211,7 +212,7 @@ class TestSetLastActivity:
         """Test that set_last_activity raises exception when no data is found."""
         with pytest.raises(Exception) as exc_info:
             set_last_activity(self.server)
-        
+
         assert str(exc_info.value) == "MCPCat data not initialized for this server"
 
 
@@ -223,24 +224,24 @@ class TestGetServerSessionId:
         self.server = create_todo_server()
         self.initial_time = datetime.now(timezone.utc)
         self.initial_session_id = "ses_initial123"
-        
+
         self.data = MCPCatData(
             project_id="test_project",
             session_id=self.initial_session_id,
             session_info=SessionInfo(),
             last_activity=self.initial_time,
             identified_sessions={},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
 
     def test_returns_existing_session_when_not_timed_out(self):
         """Test that existing session ID is returned when not timed out."""
         set_server_tracking_data(self.server, self.data)
-        
+
         # Test within timeout period (e.g., 10 minutes later)
         with freeze_time(self.initial_time + timedelta(minutes=10)):
             session_id = get_server_session_id(self.server)
-        
+
         assert session_id == self.initial_session_id
         # Verify last activity was updated
         assert self.data.last_activity > self.initial_time
@@ -248,12 +249,14 @@ class TestGetServerSessionId:
     def test_creates_new_session_when_timed_out(self):
         """Test that new session ID is created when session has timed out."""
         set_server_tracking_data(self.server, self.data)
-        
+
         # Test after timeout period (e.g., 31 minutes later)
-        timeout_time = self.initial_time + timedelta(minutes=INACTIVITY_TIMEOUT_IN_MINUTES + 1)
+        timeout_time = self.initial_time + timedelta(
+            minutes=INACTIVITY_TIMEOUT_IN_MINUTES + 1
+        )
         with freeze_time(timeout_time):
             session_id = get_server_session_id(self.server)
-        
+
         # Should have a new session ID
         assert session_id != self.initial_session_id
         assert session_id.startswith(SESSION_ID_PREFIX)
@@ -264,12 +267,14 @@ class TestGetServerSessionId:
     def test_exactly_at_timeout_boundary(self):
         """Test behavior exactly at the timeout boundary."""
         set_server_tracking_data(self.server, self.data)
-        
+
         # Test exactly at timeout boundary
-        boundary_time = self.initial_time + timedelta(minutes=INACTIVITY_TIMEOUT_IN_MINUTES)
+        boundary_time = self.initial_time + timedelta(
+            minutes=INACTIVITY_TIMEOUT_IN_MINUTES
+        )
         with freeze_time(boundary_time):
             session_id = get_server_session_id(self.server)
-        
+
         # Should not timeout at exact boundary (> not >=)
         assert session_id == self.initial_session_id
 
@@ -277,45 +282,49 @@ class TestGetServerSessionId:
         """Test that get_server_session_id raises exception when no data is found."""
         with pytest.raises(Exception) as exc_info:
             get_server_session_id(self.server)
-        
+
         assert str(exc_info.value) == "MCPCat data not initialized for this server"
 
     def test_multiple_calls_with_activity(self):
         """Test multiple calls to get_server_session_id with activity between them."""
         set_server_tracking_data(self.server, self.data)
-        
+
         # First call at initial time
         with freeze_time(self.initial_time):
             session_id1 = get_server_session_id(self.server)
-        
+
         # Activity at 20 minutes - should reset timeout
         activity_time = self.initial_time + timedelta(minutes=20)
         with freeze_time(activity_time):
             get_server_session_id(self.server)
             # This updates last_activity to activity_time
-        
+
         # Call 40 minutes after initial time (but only 20 minutes after last activity)
         with freeze_time(self.initial_time + timedelta(minutes=40)):
             session_id2 = get_server_session_id(self.server)
-        
+
         # Should still be the same session since last activity was only 20 minutes ago
         assert session_id1 == session_id2 == self.initial_session_id
 
     def test_timeout_calculation_edge_cases(self):
         """Test edge cases in timeout calculation."""
         set_server_tracking_data(self.server, self.data)
-        
+
         # Test just before timeout
-        with freeze_time(self.initial_time + timedelta(minutes=INACTIVITY_TIMEOUT_IN_MINUTES - 1)):
+        with freeze_time(
+            self.initial_time + timedelta(minutes=INACTIVITY_TIMEOUT_IN_MINUTES - 1)
+        ):
             session_id = get_server_session_id(self.server)
             assert session_id == self.initial_session_id
-        
+
         # Re-initialize data to reset the session for the next test
         self.data.session_id = self.initial_session_id
         self.data.last_activity = self.initial_time
-        
+
         # Test just after timeout
-        with freeze_time(self.initial_time + timedelta(minutes=INACTIVITY_TIMEOUT_IN_MINUTES + 1)):
+        with freeze_time(
+            self.initial_time + timedelta(minutes=INACTIVITY_TIMEOUT_IN_MINUTES + 1)
+        ):
             session_id = get_server_session_id(self.server)
             assert session_id != self.initial_session_id
 
@@ -327,74 +336,71 @@ class TestIntegration:
     def test_full_session_lifecycle(self):
         """Test a complete session lifecycle with timeout and renewal."""
         server = create_todo_server()
-        
+
         # Create initial session data
         initial_session_id = new_session_id()
         data = MCPCatData(
             project_id="integration_project",
             session_id=initial_session_id,
             session_info=SessionInfo(
-                client_name="IntegrationClient",
-                client_version="1.0.0"
+                client_name="IntegrationClient", client_version="1.0.0"
             ),
             last_activity=datetime.now(timezone.utc),
             identified_sessions={},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
-        
+
         set_server_tracking_data(server, data)
-        
+
         # Get initial session
         session_id = get_server_session_id(server)
         assert session_id == initial_session_id
-        
+
         # Get session info
         session_info = get_session_info(server, data)
         assert session_info.server_name == "todo-server"
         assert session_info.client_name == "IntegrationClient"
-        
+
         # Simulate user identification
         user_identity = UserIdentity(
             user_id="integration_user",
             user_name="Integration User",
-            user_data={"test": "data"}
+            user_data={"test": "data"},
         )
         data.identified_sessions[initial_session_id] = user_identity
-        
+
         # Get session info with identified user
         # Create new data object since session_info was converted to dict
         data_with_user = MCPCatData(
             project_id="integration_project",
             session_id=initial_session_id,
             session_info=SessionInfo(
-                client_name="IntegrationClient",
-                client_version="1.0.0"
+                client_name="IntegrationClient", client_version="1.0.0"
             ),
             last_activity=datetime.now(timezone.utc),
             identified_sessions={initial_session_id: user_identity},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
         session_info = get_session_info(server, data_with_user)
         assert session_info.identify_actor_given_id == "integration_user"
         assert session_info.identify_actor_name == "Integration User"
-        
+
         # Test session timeout and renewal
         with freeze_time("2024-01-01 12:31:00"):  # 31 minutes later
             new_sid = get_server_session_id(server)
             assert new_sid != initial_session_id
-            
+
             # Old session's user identity should not apply to new session
             # Create new data for testing since stored data has dict session_info
             new_data = MCPCatData(
                 project_id="integration_project",
                 session_id=new_sid,
                 session_info=SessionInfo(
-                    client_name="IntegrationClient",
-                    client_version="1.0.0"
+                    client_name="IntegrationClient", client_version="1.0.0"
                 ),
                 last_activity=datetime(2024, 1, 1, 12, 31, 0),
                 identified_sessions={},  # No user identified for new session
-                options=MCPCatOptions()
+                options=MCPCatOptions(),
             )
             session_info = get_session_info(server, new_data)
             assert session_info.identify_actor_given_id is None
@@ -403,7 +409,7 @@ class TestIntegration:
     def test_session_persistence_across_function_calls(self):
         """Test that session persists correctly across multiple function calls."""
         server = create_todo_server()
-        
+
         # Initialize tracking data
         data = MCPCatData(
             project_id="persistence_test",
@@ -411,63 +417,62 @@ class TestIntegration:
             session_info=SessionInfo(),
             last_activity=datetime.now(timezone.utc),
             identified_sessions={},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
-        
+
         set_server_tracking_data(server, data)
-        
+
         # Multiple calls should return same session
         session_ids = []
         for _ in range(5):
             session_ids.append(get_server_session_id(server))
-        
+
         assert len(set(session_ids)) == 1  # All should be the same
-        
+
         # Verify activity tracking works
         original_activity = data.last_activity
         with freeze_time(datetime.now(timezone.utc) + timedelta(seconds=5)):
             set_last_activity(server)
-        
+
         assert data.last_activity > original_activity
 
     def test_session_info_updates_tracked_data(self):
         """Test that get_session_info properly updates tracked server data."""
         server = create_todo_server()
-        
+
         # Create user identity
         user_identity = UserIdentity(
             user_id="tracked_user",
             user_name="Tracked User",
-            user_data={"tracked": "yes"}
+            user_data={"tracked": "yes"},
         )
-        
+
         # Initialize data with identified session
         data = MCPCatData(
             project_id="update_test",
             session_id="update_session",
             session_info=SessionInfo(
-                client_name="UpdateClient",
-                client_version="1.0.0"
+                client_name="UpdateClient", client_version="1.0.0"
             ),
             last_activity=datetime.now(timezone.utc),
             identified_sessions={"update_session": user_identity},
-            options=MCPCatOptions()
+            options=MCPCatOptions(),
         )
-        
+
         # Store data in server
         set_server_tracking_data(server, data)
-        
+
         # When passing data to get_session_info, it updates the stored data
         session_info = get_session_info(server, data)
-        
+
         # Verify the session info was properly constructed
         assert session_info.identify_actor_given_id == "tracked_user"
         assert session_info.identify_actor_name == "Tracked User"
         assert session_info.identify_data == {"tracked": "yes"}
-        
+
         # Verify the data object was updated
         assert data.session_info == session_info
-        
+
         # Verify that the server's tracked data was also updated via set_server_tracking_data
         stored_data = get_server_tracking_data(server)
         assert stored_data.session_info == session_info

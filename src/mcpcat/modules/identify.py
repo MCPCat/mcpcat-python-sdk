@@ -1,7 +1,3 @@
-
-
-
-
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -15,10 +11,10 @@ from mcpcat.types import EventType, UnredactedEvent, UserIdentity
 def identify_session(server, request: any, context: any) -> None:
     """
     Identify the user based on the request and context.
-    
+
     Calls the user-defined identify function with the full request and context objects.
     The context may contain transport-specific information (e.g., HTTP headers for SSE/WebSocket transports).
-    
+
     :param server: The MCP server instance.
     :param request: The request data containing user information.
     :param context: The full context object which may include transport-specific data.
@@ -28,25 +24,31 @@ def identify_session(server, request: any, context: any) -> None:
 
     if not data or not data.options or not data.options.identify:
         return
-    
+
     # Handle None context (e.g., in stateless HTTP mode outside handlers)
     if context is None:
         write_to_log("Context is None, skipping user identification")
         return
-    
+
     if data.identified_sessions.get(data.session_id):
-        write_to_log(f"User is already identified: {data.identified_sessions[data.session_id].user_id}")
+        write_to_log(
+            f"User is already identified: {data.identified_sessions[data.session_id].user_id}"
+        )
         return
 
     # Call the user-defined identify function
     try:
         identify_result = data.options.identify(request, context)
         if not identify_result or not isinstance(identify_result, UserIdentity):
-            write_to_log(f"User identification function did not return a valid UserIdentity instance. Received: {identify_result}")
+            write_to_log(
+                f"User identification function did not return a valid UserIdentity instance. Received: {identify_result}"
+            )
             return
 
         data.identified_sessions[data.session_id] = identify_result
-        write_to_log(f"User identified: {identify_result.user_id} - {identify_result.user_name or 'Unknown Name'}")
+        write_to_log(
+            f"User identified: {identify_result.user_id} - {identify_result.user_name or 'Unknown Name'}"
+        )
         set_server_tracking_data(server, data)
         event = UnredactedEvent(
             session_id=data.session_id,

@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcpcat.modules.logging import write_to_log
+from mcpcat.modules.logging import write_to_log, debug_mode
 
 
 class TestLogging:
@@ -31,6 +31,15 @@ class TestLogging:
 
     def test_write_to_log_creates_file(self, tmp_path):
         """Test that write_to_log creates the log file if it doesn't exist."""
+        # Enable debug mode using environment variable MCPCAT_DEBUG_MODE
+        os.environ["MCPCAT_DEBUG_MODE"] = "true"
+        global debug_mode
+        debug_mode = (
+            os.getenv("MCPCAT_DEBUG_MODE").lower()
+            if os.getenv("MCPCAT_DEBUG_MODE") != None
+            else str(debug_mode).lower()
+        )
+
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
@@ -55,27 +64,51 @@ class TestLogging:
             # Verify timestamp format (ISO format)
             assert "T" in content, "Timestamp not in ISO format"
 
-    def test_write_to_log_debug_mode(self, tmp_path):
+    def test_write_to_log_checks_debug_mode(self, tmp_path):
         """Test that write_to_log writes to file when debug mode is enabled."""
-        # Check whether MCPCAT_DEBUG_MODE overrides the default enabled state
+        # Check that MCPCAT_DEBUG_MODE overrides the default setting and writes log to file
+        os.environ["MCPCAT_DEBUG_MODE"] = "true"
+        global debug_mode
+        debug_mode = (
+            os.getenv("MCPCAT_DEBUG_MODE").lower()
+            if os.getenv("MCPCAT_DEBUG_MODE") != None
+            else str(debug_mode).lower()
+        )
+        assert debug_mode == "true", (
+            "Environment variable failed to override default setting"
+        )
+
+        # Use a unique file name for this test
+        unique_id = str(uuid.uuid4())
+        log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
+
+        # Mock os.path.expanduser to use our temp file
+        with patch(
+            "mcpcat.modules.logging.os.path.expanduser", return_value=str(log_file)
+        ):
+            # Write a test message
+            test_message = f"Test log message {unique_id}"
+            write_to_log(test_message)
+
+            # Check that the file was created
+            assert log_file.exists(), "Log file was not created"
+
+            # Read the file content
+            content = log_file.read_text()
+
+            # Verify the message is in the file
+            assert test_message in content, "Log message not found in file"
+
+            # Verify timestamp format (ISO format)
+            assert "T" in content, "Timestamp not in ISO format"
+
+        # Check that log file is not created when debug mode is disabled
         os.environ["MCPCAT_DEBUG_MODE"] = "false"
         debug_mode = (
             os.getenv("MCPCAT_DEBUG_MODE").lower()
             if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(options.debug_mode).lower()
+            else str(debug_mode).lower()
         )
-        assert debug_mode == "false", (
-            "Environment variable failed to override default setting"
-        )
-
-        # Check whether log is written to file when debug_mode is enabled
-        os.environ["MCPCAT_DEBUG_MODE"] = "true"
-        debug_mode = (
-            os.getenv("MCPCAT_DEBUG_MODE").lower()
-            if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(options.debug_mode).lower()
-        )
-        assert debug_mode == "true", "Failed to read debug_mode value"
 
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
@@ -90,19 +123,19 @@ class TestLogging:
             write_to_log(test_message)
 
             # Check that the file was created
-            assert log_file.exists(), "Log file was not created"
-
-            # Read the file content
-            content = log_file.read_text()
-
-            # Verify the message is in the file
-            assert test_message in content, "Log message not found in file"
-
-            # Verify timestamp format (ISO format)
-            assert "T" in content, "Timestamp not in ISO format"
+            assert not log_file.exists(), "Log file was wrongly created"
 
     def test_write_to_log_appends_messages(self, tmp_path):
         """Test that write_to_log appends to existing log file."""
+        # Enable debug mode using environment variable MCPCAT_DEBUG_MODE
+        os.environ["MCPCAT_DEBUG_MODE"] = "true"
+        global debug_mode
+        debug_mode = (
+            os.getenv("MCPCAT_DEBUG_MODE").lower()
+            if os.getenv("MCPCAT_DEBUG_MODE") != None
+            else str(debug_mode).lower()
+        )
+
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
@@ -151,6 +184,15 @@ class TestLogging:
 
     def test_write_to_log_handles_directory_creation(self, tmp_path):
         """Test that write_to_log creates parent directories if needed."""
+        # Enable debug mode using environment variable MCPCAT_DEBUG_MODE
+        os.environ["MCPCAT_DEBUG_MODE"] = "true"
+        global debug_mode
+        debug_mode = (
+            os.getenv("MCPCAT_DEBUG_MODE").lower()
+            if os.getenv("MCPCAT_DEBUG_MODE") != None
+            else str(debug_mode).lower()
+        )
+
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
@@ -169,6 +211,15 @@ class TestLogging:
 
     def test_write_to_log_silently_handles_errors(self, tmp_path, monkeypatch):
         """Test that write_to_log doesn't raise exceptions on errors."""
+        # Enable debug mode using environment variable MCPCAT_DEBUG_MODE
+        os.environ["MCPCAT_DEBUG_MODE"] = "true"
+        global debug_mode
+        debug_mode = (
+            os.getenv("MCPCAT_DEBUG_MODE").lower()
+            if os.getenv("MCPCAT_DEBUG_MODE") != None
+            else str(debug_mode).lower()
+        )
+
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"

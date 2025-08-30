@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 from mcpcat.types import MCPCatOptions
 
 
+debug_mode = False
+
+
 def write_to_log(message: str) -> None:
     timestamp = datetime.now(timezone.utc).isoformat()
     log_entry = f"[{timestamp}] {message}\n"
@@ -14,11 +17,11 @@ def write_to_log(message: str) -> None:
     log_path = os.path.expanduser("~/mcpcat.log")
 
     try:
-        options = MCPCatOptions()
+        global debug_mode
         debug_mode = (
             os.getenv("MCPCAT_DEBUG_MODE").lower()
             if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(options.debug_mode).lower()
+            else str(debug_mode).lower()
         )
         if debug_mode == "true":
             # Write to log file (no need to ensure directory exists for home directory)

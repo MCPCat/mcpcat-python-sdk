@@ -122,7 +122,7 @@ class MCPCatOptions:
     identify: IdentifyFunction | None = None
     redact_sensitive_information: RedactionFunction | None = None
     exporters: dict[str, ExporterConfig] | None = None
-    debug_mode: bool = True
+    debug_mode: bool = False
 
 
 @dataclass

@@ -132,14 +132,6 @@ mcpcat.track(
 )
 ```
 
-### Disabling log retention
-
-MCPcat saves debug logs by default. In production environments or when debugging is not needed, this can create unnecessary disk I/O and storage usage. To prevent this, disable debug_mode using the following environment variable:
-
-```bash
-export MCPCAT_DEBUG_MODE="false"
-```
-
 Learn more about our free and open source [telemetry integrations](https://docs.mcpcat.io/telemetry/integrations).
 
 ## Free for open source

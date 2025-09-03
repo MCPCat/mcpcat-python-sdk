@@ -125,6 +125,7 @@ class MCPCatOptions:
     debug_mode: bool = False
 
 
+
 @dataclass
 class MCPCatData:
     """Internal data structure for tracking."""

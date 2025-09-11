@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcpcat.modules.logging import write_to_log, debug_mode
+from mcpcat.modules.logging import write_to_log, set_debug_mode
 
 
 class TestLogging:
@@ -31,14 +31,8 @@ class TestLogging:
 
     def test_write_to_log_creates_file(self, tmp_path):
         """Test that write_to_log creates the log file if it doesn't exist."""
-        # Enable debug mode using environment variable MCPCAT_DEBUG_MODE
-        os.environ["MCPCAT_DEBUG_MODE"] = "true"
-        global debug_mode
-        debug_mode = (
-            os.getenv("MCPCAT_DEBUG_MODE").lower()
-            if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(debug_mode).lower()
-        )
+        # Enable debug mode
+        set_debug_mode(True)
 
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
@@ -66,17 +60,8 @@ class TestLogging:
 
     def test_write_to_log_checks_debug_mode(self, tmp_path):
         """Test that write_to_log writes to file when debug mode is enabled."""
-        # Check that MCPCAT_DEBUG_MODE overrides the default setting and writes log to file
-        os.environ["MCPCAT_DEBUG_MODE"] = "true"
-        global debug_mode
-        debug_mode = (
-            os.getenv("MCPCAT_DEBUG_MODE").lower()
-            if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(debug_mode).lower()
-        )
-        assert debug_mode == "true", (
-            "Environment variable failed to override default setting"
-        )
+        # Enable debug mode
+        set_debug_mode(True)
 
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
@@ -103,12 +88,7 @@ class TestLogging:
             assert "T" in content, "Timestamp not in ISO format"
 
         # Check that log file is not created when debug mode is disabled
-        os.environ["MCPCAT_DEBUG_MODE"] = "false"
-        debug_mode = (
-            os.getenv("MCPCAT_DEBUG_MODE").lower()
-            if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(debug_mode).lower()
-        )
+        set_debug_mode(False)
 
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
@@ -127,14 +107,8 @@ class TestLogging:
 
     def test_write_to_log_appends_messages(self, tmp_path):
         """Test that write_to_log appends to existing log file."""
-        # Enable debug mode using environment variable MCPCAT_DEBUG_MODE
-        os.environ["MCPCAT_DEBUG_MODE"] = "true"
-        global debug_mode
-        debug_mode = (
-            os.getenv("MCPCAT_DEBUG_MODE").lower()
-            if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(debug_mode).lower()
-        )
+        # Enable debug mode
+        set_debug_mode(True)
 
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
@@ -184,14 +158,8 @@ class TestLogging:
 
     def test_write_to_log_handles_directory_creation(self, tmp_path):
         """Test that write_to_log creates parent directories if needed."""
-        # Enable debug mode using environment variable MCPCAT_DEBUG_MODE
-        os.environ["MCPCAT_DEBUG_MODE"] = "true"
-        global debug_mode
-        debug_mode = (
-            os.getenv("MCPCAT_DEBUG_MODE").lower()
-            if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(debug_mode).lower()
-        )
+        # Enable debug mode
+        set_debug_mode(True)
 
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
@@ -211,14 +179,8 @@ class TestLogging:
 
     def test_write_to_log_silently_handles_errors(self, tmp_path, monkeypatch):
         """Test that write_to_log doesn't raise exceptions on errors."""
-        # Enable debug mode using environment variable MCPCAT_DEBUG_MODE
-        os.environ["MCPCAT_DEBUG_MODE"] = "true"
-        global debug_mode
-        debug_mode = (
-            os.getenv("MCPCAT_DEBUG_MODE").lower()
-            if os.getenv("MCPCAT_DEBUG_MODE") != None
-            else str(debug_mode).lower()
-        )
+        # Enable debug mode
+        set_debug_mode(True)
 
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
@@ -243,6 +205,9 @@ class TestLogging:
 
     def test_log_format(self, tmp_path):
         """Test the format of log entries."""
+        # Enable debug mode
+        set_debug_mode(True)
+        
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"

@@ -11,7 +11,7 @@ from mcpcat.modules.session import (
 
 from .modules.compatibility import is_compatible_server, is_fastmcp_server
 from .modules.internal import set_server_tracking_data
-from .modules.logging import write_to_log, debug_mode
+from .modules.logging import write_to_log, set_debug_mode
 from .types import (
     MCPCatData,
     MCPCatOptions,
@@ -44,7 +44,7 @@ def track(
         options = MCPCatOptions()
 
     # Update global debug_mode value
-    debug_mode = options.debug_mode
+    set_debug_mode(options.debug_mode)
 
     # Validate configuration
     if not project_id and not options.exporters:

@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcpcat.modules.logging import write_to_log
+from mcpcat.modules.logging import write_to_log, set_debug_mode
 
 
 class TestLogging:
@@ -31,6 +31,9 @@ class TestLogging:
 
     def test_write_to_log_creates_file(self, tmp_path):
         """Test that write_to_log creates the log file if it doesn't exist."""
+        # Enable debug mode
+        set_debug_mode(True)
+
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
@@ -55,8 +58,58 @@ class TestLogging:
             # Verify timestamp format (ISO format)
             assert "T" in content, "Timestamp not in ISO format"
 
+    def test_write_to_log_checks_debug_mode(self, tmp_path):
+        """Test that write_to_log writes to file when debug mode is enabled."""
+        # Enable debug mode
+        set_debug_mode(True)
+
+        # Use a unique file name for this test
+        unique_id = str(uuid.uuid4())
+        log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
+
+        # Mock os.path.expanduser to use our temp file
+        with patch(
+            "mcpcat.modules.logging.os.path.expanduser", return_value=str(log_file)
+        ):
+            # Write a test message
+            test_message = f"Test log message {unique_id}"
+            write_to_log(test_message)
+
+            # Check that the file was created
+            assert log_file.exists(), "Log file was not created"
+
+            # Read the file content
+            content = log_file.read_text()
+
+            # Verify the message is in the file
+            assert test_message in content, "Log message not found in file"
+
+            # Verify timestamp format (ISO format)
+            assert "T" in content, "Timestamp not in ISO format"
+
+        # Check that log file is not created when debug mode is disabled
+        set_debug_mode(False)
+
+        # Use a unique file name for this test
+        unique_id = str(uuid.uuid4())
+        log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
+
+        # Mock os.path.expanduser to use our temp file
+        with patch(
+            "mcpcat.modules.logging.os.path.expanduser", return_value=str(log_file)
+        ):
+            # Write a test message
+            test_message = f"Test log message {unique_id}"
+            write_to_log(test_message)
+
+            # Check that the file was created
+            assert not log_file.exists(), "Log file was wrongly created"
+
     def test_write_to_log_appends_messages(self, tmp_path):
         """Test that write_to_log appends to existing log file."""
+        # Enable debug mode
+        set_debug_mode(True)
+
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
@@ -105,6 +158,9 @@ class TestLogging:
 
     def test_write_to_log_handles_directory_creation(self, tmp_path):
         """Test that write_to_log creates parent directories if needed."""
+        # Enable debug mode
+        set_debug_mode(True)
+
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
@@ -123,6 +179,9 @@ class TestLogging:
 
     def test_write_to_log_silently_handles_errors(self, tmp_path, monkeypatch):
         """Test that write_to_log doesn't raise exceptions on errors."""
+        # Enable debug mode
+        set_debug_mode(True)
+
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"
@@ -146,6 +205,9 @@ class TestLogging:
 
     def test_log_format(self, tmp_path):
         """Test the format of log entries."""
+        # Enable debug mode
+        set_debug_mode(True)
+        
         # Use a unique file name for this test
         unique_id = str(uuid.uuid4())
         log_file = tmp_path / f"test_mcpcat_{unique_id}.log"

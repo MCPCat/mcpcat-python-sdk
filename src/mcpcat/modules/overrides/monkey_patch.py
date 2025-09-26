@@ -207,7 +207,7 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
             name: str,
             arguments: dict[str, Any],
             context: Any | None = None,
-            convert_result: bool = False,
+            **kwargs  # Accept any additional parameters for version compatibility
         ) -> Any:
             """Patched call_tool that adds MCPCat tracking."""
             # Initialize variables for tracking
@@ -306,7 +306,7 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                     raise ValueError("Original call_tool method is not callable")
 
                 result = await original_call_tool(
-                    name, args_for_tool, context=context, convert_result=convert_result
+                    name, args_for_tool, context=context, **kwargs
                 )
 
                 # Try to capture response in event (non-critical)

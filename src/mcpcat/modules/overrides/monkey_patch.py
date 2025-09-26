@@ -4,6 +4,7 @@ This module patches MCP server methods to intercept tool registration and execut
 enabling MCPCat to track tools regardless of when they are registered.
 """
 
+import inspect
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any, List, Optional
@@ -69,11 +70,27 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                 return result.content
 
             # Register it with the server
-            server.add_tool(
-                get_more_tools,
-                name="get_more_tools",
-                description="Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
-            )
+            # Use inspect to determine which parameters are supported
+            try:
+                if hasattr(server, 'add_tool'):
+                    sig = inspect.signature(server.add_tool)
+                    kwargs = {
+                        "name": "get_more_tools",
+                        "description": "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
+                    }
+                    # Only add icons if the parameter exists
+                    if "icons" in sig.parameters:
+                        kwargs["icons"] = None
+                    server.add_tool(get_more_tools, **kwargs)
+                else:
+                    # Fallback for older versions
+                    server.add_tool(
+                        get_more_tools,
+                        name="get_more_tools",
+                        description="Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
+                    )
+            except Exception as e:
+                write_to_log(f"Error registering get_more_tools: {e}")
             write_to_log("Added get_more_tools tool to FastMCP server")
 
         # First, capture any tools that were already registered
@@ -119,11 +136,7 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
         # Patch add_tool to track new registrations
         def patched_add_tool(
             fn: Callable[..., Any],
-            name: str | None = None,
-            title: str | None = None,
-            description: str | None = None,
-            annotations: Any | None = None,
-            structured_output: bool | None = None,
+            **kwargs
         ) -> Any:
             """Patched add_tool that tracks tool registration."""
             try:
@@ -132,21 +145,27 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                 if not callable(original_add_tool):
                     write_to_log("Warning: original_add_tool is not callable")
                     return fn
-                result = original_add_tool(
-                    fn,
-                    name=name,
-                    title=title,
-                    description=description,
-                    annotations=annotations,
-                    structured_output=structured_output,
-                )
+
+                # Get the signature of the original method to filter kwargs
+                try:
+                    sig = inspect.signature(original_add_tool)
+                    # Filter kwargs to only include parameters that exist in the original signature
+                    filtered_kwargs = {
+                        k: v for k, v in kwargs.items()
+                        if k in sig.parameters
+                    }
+                except Exception as e:
+                    write_to_log(f"Could not inspect signature, passing all kwargs: {e}")
+                    filtered_kwargs = kwargs
+
+                result = original_add_tool(fn, **filtered_kwargs)
 
                 # Track the tool registration (wrapped in try-catch to never fail)
                 try:
                     tool_name = (
                         result.name
                         if hasattr(result, "name")
-                        else (name or fn.__name__)
+                        else (kwargs.get("name") or fn.__name__)
                     )
                     register_tool(server, tool_name)
 
@@ -168,16 +187,19 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                 # If anything fails, try to call original method directly
                 if callable(original_add_tool):
                     try:
-                        return original_add_tool(
-                            fn,
-                            name=name,
-                            title=title,
-                            description=description,
-                            annotations=annotations,
-                            structured_output=structured_output,
-                        )
+                        # Try with filtered kwargs first
+                        sig = inspect.signature(original_add_tool)
+                        filtered_kwargs = {
+                            k: v for k, v in kwargs.items()
+                            if k in sig.parameters
+                        }
+                        return original_add_tool(fn, **filtered_kwargs)
                     except:
-                        pass
+                        # Last attempt with no kwargs
+                        try:
+                            return original_add_tool(fn)
+                        except:
+                            pass
                 return fn  # Last resort fallback
 
         # Patch call_tool to ensure tracking and add context

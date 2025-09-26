@@ -70,8 +70,8 @@ jobs:
     
     - name: Update pyproject.toml with MCP ${{ matrix.mcp-version }}
       run: |
-        # Replace the whole quoted string, preserving the trailing comma
-        sed -i -E 's/"mcp==[^"]+"/"mcp==${{ matrix.mcp-version }}"/' pyproject.toml
+        # Replace mcp>=x.x.x or mcp==x.x.x with the specific version
+        sed -i -E 's/"mcp[>=]+[^"]+"/"mcp==${{ matrix.mcp-version }}"/' pyproject.toml
         
     - name: Install dependencies with MCP ${{ matrix.mcp-version }}
       run: |

@@ -1,6 +1,6 @@
 [project]
 name = "mcpcat"
-version = "0.1.6"
+version = "0.1.7"
 description = "Analytics Tool for MCP Servers - provides insights into MCP tool usage patterns"
 authors = [
     { name = "MCPCat", email = "support@mcpcat.io" },
@@ -30,6 +30,9 @@ dependencies = [
 "Repository" = "https://github.com/MCPCat/mcpcat-python-sdk"
 
 [project.optional-dependencies]
+community = [
+    "fastmcp>=2.7.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",

@@ -4,6 +4,17 @@ from typing import Any, Protocol, runtime_checkable
 
 from mcp import ServerResult
 
+# Supported version ranges for MCP and FastMCP
+SUPPORTED_MCP_VERSIONS = ">=1.2.0"
+SUPPORTED_OFFICIAL_FASTMCP_VERSIONS = ">=1.2.0"
+SUPPORTED_COMMUNITY_FASTMCP_VERSIONS = ">=2.7.0"
+
+# Version compatibility message for errors
+COMPATIBILITY_ERROR_MESSAGE = (
+    f"Server must be a supported version of a FastMCP instance "
+    f"(official: {SUPPORTED_OFFICIAL_FASTMCP_VERSIONS}, community: {SUPPORTED_COMMUNITY_FASTMCP_VERSIONS}) "
+    f"or MCP Low-level Server instance ({SUPPORTED_MCP_VERSIONS})"
+)
 
 @runtime_checkable
 class MCPServerProtocol(Protocol):
@@ -17,12 +28,39 @@ class MCPServerProtocol(Protocol):
         """Call a tool by name."""
         ...
 
+def is_community_fastmcp_server(server: Any) -> bool:
+    """Check if the server is a community FastMCP instance.
+    
+    Community FastMCP comes from the 'fastmcp' package.
+    """
+    # Check by class name and module
+    class_name = server.__class__.__name__
+    module_name = server.__class__.__module__
+    
+    # Community FastMCP has class name 'FastMCP' and module starts with 'fastmcp'
+    return (
+        class_name == "FastMCP" and 
+        module_name.startswith("fastmcp") and
+        hasattr(server, "_mcp_server") and 
+        hasattr(server, "_tool_manager")
+    )
 
-def is_fastmcp_server(server: Any) -> bool:
-    """Check if the server is a FastMCP instance."""
-    # Check for FastMCP class name or specific attributes
-    # A FastMCP server should have both _mcp_server and _tool_manager
-    return hasattr(server, "_mcp_server") and hasattr(server, "_tool_manager")
+def is_official_fastmcp_server(server: Any) -> bool:
+    """Check if the server is an official FastMCP instance.
+    
+    Official FastMCP comes from the 'mcp.server.fastmcp' module.
+    """
+    # Check by class name and module
+    class_name = server.__class__.__name__
+    module_name = server.__class__.__module__
+    
+    # Official FastMCP has class name 'FastMCP' and module 'mcp.server.fastmcp'
+    return (
+        class_name == "FastMCP" and 
+        module_name.startswith("mcp.server.fastmcp") and
+        hasattr(server, "_mcp_server") and 
+        hasattr(server, "_tool_manager")
+    )
 
 
 def has_required_fastmcp_attributes(server: Any) -> bool:
@@ -54,6 +92,10 @@ def has_required_fastmcp_attributes(server: Any) -> bool:
     if not hasattr(server, "_mcp_server"):
         return False
 
+    # Check if _mcp_server has _get_cached_tool_definition method (for community FastMCP patching)
+    if not hasattr(server._mcp_server, "_get_cached_tool_definition"):
+        return False
+
     return True
 
 
@@ -67,7 +109,7 @@ def has_neccessary_attributes(server: Any) -> bool:
             return False
 
     # For FastMCP servers, verify all required attributes for monkey patching
-    if is_fastmcp_server(server):
+    if is_official_fastmcp_server(server):
         # Use the comprehensive FastMCP validation
         if not has_required_fastmcp_attributes(server):
             return False
@@ -100,6 +142,11 @@ def has_neccessary_attributes(server: Any) -> bool:
 
 def is_compatible_server(server: Any) -> bool:
     """Check if the server is compatible with MCPCat."""
+    # If it's either official or community FastMCP, it's compatible
+    if is_official_fastmcp_server(server) or is_community_fastmcp_server(server):
+        return True
+    
+    # Otherwise, check for necessary attributes
     return has_neccessary_attributes(server)
 
 
@@ -144,3 +191,21 @@ def is_mcp_error_response(response: ServerResult) -> tuple[bool, str]:
     except Exception as e:
         # Log unexpected errors but still return a valid response
         return False, f"Error checking response: {str(e)}"
+
+__all__ = [
+    # Version constants
+    "SUPPORTED_MCP_VERSIONS",
+    "SUPPORTED_OFFICIAL_FASTMCP_VERSIONS", 
+    "SUPPORTED_COMMUNITY_FASTMCP_VERSIONS",
+    "COMPATIBILITY_ERROR_MESSAGE",
+    # Functions
+    "is_compatible_server",
+    "is_official_fastmcp_server",
+    "is_community_fastmcp_server",
+    "has_required_fastmcp_attributes",
+    "has_neccessary_attributes",
+    "get_mcp_compatible_error_message",
+    "is_mcp_error_response",
+    # Protocols
+    "MCPServerProtocol",
+]

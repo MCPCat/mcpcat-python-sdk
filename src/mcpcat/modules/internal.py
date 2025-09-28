@@ -4,8 +4,8 @@ import weakref
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from ..types import MCPCatData, ToolRegistration
-from .compatibility import is_fastmcp_server
+from ..types import EventType, MCPCatData, ToolRegistration, UnredactedEvent
+from .compatibility import is_official_fastmcp_server
 from .logging import write_to_log
 
 # WeakKeyDictionary to store data associated with server instances
@@ -20,7 +20,7 @@ _original_methods: Dict[str, Any] = {}
 
 def _get_server_key(server: Any) -> Any:
     """Get the canonical key for a server (handles FastMCP vs low-level)."""
-    if is_fastmcp_server(server):
+    if is_official_fastmcp_server(server):
         return server._mcp_server
     return server
 
@@ -50,6 +50,7 @@ def reset_all_tracking_data() -> None:
     _server_data_map.clear()
     _original_methods.clear()
     write_to_log("Reset all server tracking data")
+
 
 
 # Dynamic tracking helper methods

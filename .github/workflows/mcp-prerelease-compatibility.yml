@@ -1,94 +1,76 @@
-name: MCP Version Compatibility Testing
+name: MCP Prerelease Compatibility Testing
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   schedule:
-    # Run weekly to catch new MCP versions
-    - cron: '0 0 * * 0'
+    # Run daily at 2 AM UTC to catch new prereleases
+    - cron: '0 2 * * *'
   workflow_dispatch:
+    inputs:
+      test_specific_version:
+        description: 'Specific version to test (optional)'
+        required: false
+        type: string
 
 jobs:
-  discover-mcp-versions:
+  discover-mcp-prereleases:
     runs-on: ubuntu-latest
     outputs:
-      mcp-versions: ${{ steps.get-mcp-versions.outputs.versions }}
+      mcp-prereleases: ${{ steps.get-mcp-prereleases.outputs.versions }}
+      has-prereleases: ${{ steps.get-mcp-prereleases.outputs.has-prereleases }}
 
     steps:
-    - name: Get available MCP versions
-      id: get-mcp-versions
+    - name: Get available MCP prerelease versions
+      id: get-mcp-prereleases
       run: |
-        # Get all available versions from PyPI
-        versions=$(pip index versions mcp 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | sort -V)
+        # Get all available versions from PyPI including prereleases
+        all_versions=$(pip index versions mcp --pre 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+[ab][0-9]\+\|[0-9]\+\.[0-9]\+\.[0-9]\+rc[0-9]\+' | sort -V || echo "")
 
-        # Filter to versions >= 1.2.0 and get only latest patch version for each minor
-        declare -A latest_minor
-        for version in $versions; do
-          major=$(echo $version | cut -d. -f1)
-          minor=$(echo $version | cut -d. -f2)
-          patch=$(echo $version | cut -d. -f3)
+        if [ -z "$all_versions" ]; then
+          echo "No MCP prereleases found"
+          echo "versions=[]" >> $GITHUB_OUTPUT
+          echo "has-prereleases=false" >> $GITHUB_OUTPUT
+        else
+          # Get only the latest prerelease
+          latest=$(echo "$all_versions" | tail -n 1)
+          json_array="[\"$latest\"]"
+          echo "Found MCP prerelease: $json_array"
+          echo "versions=$json_array" >> $GITHUB_OUTPUT
+          echo "has-prereleases=true" >> $GITHUB_OUTPUT
+        fi
 
-          # Include if version >= 1.2.0
-          if [ "$major" -gt 1 ] || ([ "$major" -eq 1 ] && [ "$minor" -ge 2 ]); then
-            minor_key="$major.$minor"
-            latest_minor[$minor_key]="$version"
-          fi
-        done
-
-        # Create JSON array from latest versions
-        filtered_versions=()
-        for version in "${latest_minor[@]}"; do
-          filtered_versions+=(\"$version\")
-        done
-
-        json_array="[$(IFS=,; echo "${filtered_versions[*]}")]"
-        echo "Found MCP versions: $json_array"
-        echo "versions=$json_array" >> $GITHUB_OUTPUT
-
-  discover-fastmcp-versions:
+  discover-fastmcp-prereleases:
     runs-on: ubuntu-latest
     outputs:
-      fastmcp-versions: ${{ steps.get-fastmcp-versions.outputs.versions }}
+      fastmcp-prereleases: ${{ steps.get-fastmcp-prereleases.outputs.versions }}
+      has-prereleases: ${{ steps.get-fastmcp-prereleases.outputs.has-prereleases }}
 
     steps:
-    - name: Get available FastMCP versions
-      id: get-fastmcp-versions
+    - name: Get available FastMCP prerelease versions
+      id: get-fastmcp-prereleases
       run: |
-        # Get all available versions from PyPI
-        versions=$(pip index versions fastmcp 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | sort -V)
+        # Get all available versions from PyPI including prereleases
+        all_versions=$(pip index versions fastmcp --pre 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+[ab][0-9]\+\|[0-9]\+\.[0-9]\+\.[0-9]\+rc[0-9]\+' | sort -V || echo "")
 
-        # Filter to versions >= 2.7.0 and get only latest patch version for each minor
-        declare -A latest_minor
-        for version in $versions; do
-          major=$(echo $version | cut -d. -f1)
-          minor=$(echo $version | cut -d. -f2)
-          patch=$(echo $version | cut -d. -f3)
+        if [ -z "$all_versions" ]; then
+          echo "No FastMCP prereleases found"
+          echo "versions=[]" >> $GITHUB_OUTPUT
+          echo "has-prereleases=false" >> $GITHUB_OUTPUT
+        else
+          # Get only the latest prerelease
+          latest=$(echo "$all_versions" | tail -n 1)
+          json_array="[\"$latest\"]"
+          echo "Found FastMCP prerelease: $json_array"
+          echo "versions=$json_array" >> $GITHUB_OUTPUT
+          echo "has-prereleases=true" >> $GITHUB_OUTPUT
+        fi
 
-          # Include if version >= 2.7.0
-          if [ "$major" -gt 2 ] || ([ "$major" -eq 2 ] && [ "$minor" -ge 7 ]); then
-            minor_key="$major.$minor"
-            latest_minor[$minor_key]="$version"
-          fi
-        done
-
-        # Create JSON array from latest versions
-        filtered_versions=()
-        for version in "${latest_minor[@]}"; do
-          filtered_versions+=("\"$version\"")
-        done
-
-        json_array="[$(IFS=,; echo "${filtered_versions[*]}")]"
-        echo "Found FastMCP versions: $json_array"
-        echo "versions=$json_array" >> $GITHUB_OUTPUT
-
-  test-fastmcp-compatibility:
+  test-fastmcp-prerelease:
     runs-on: ubuntu-latest
-    needs: discover-fastmcp-versions
+    needs: discover-fastmcp-prereleases
+    if: needs.discover-fastmcp-prereleases.outputs.has-prereleases == 'true'
     strategy:
       matrix:
-        fastmcp-version: ${{ fromJson(needs.discover-fastmcp-versions.outputs.fastmcp-versions) }}
+        fastmcp-version: ${{ fromJson(needs.discover-fastmcp-prereleases.outputs.fastmcp-prereleases) }}
       fail-fast: false
 
     steps:
@@ -104,13 +86,12 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Update pyproject.toml with FastMCP ${{ matrix.fastmcp-version }}
+    - name: Update pyproject.toml with prerelease FastMCP ${{ matrix.fastmcp-version }}
       run: |
-        # Update the community extras section with the specific FastMCP version
+        # Update the community extras section with the specific FastMCP prerelease version
         sed -i -E 's/"fastmcp[>=]+[^"]+"/\"fastmcp==${{ matrix.fastmcp-version }}\"/' pyproject.toml
 
-        # Also update the MCP dependency to be flexible so FastMCP can choose its version
-        # Remove the strict MCP version constraint and use >=1.2.0
+        # Keep MCP flexible so FastMCP can choose its version
         sed -i -E 's/"mcp[>=]+[^"]+"/\"mcp>=1.2.0\"/' pyproject.toml
 
         # Show the updated dependencies for verification
@@ -120,21 +101,24 @@ jobs:
         echo "Updated community extras:"
         grep -A 2 "^\[project.optional-dependencies\]" pyproject.toml | grep -A 2 "community"
 
-    - name: Install dependencies with FastMCP ${{ matrix.fastmcp-version }}
+    - name: Install dependencies with prerelease FastMCP ${{ matrix.fastmcp-version }}
       run: |
-        # Install with both dev and community extras
-        # Let FastMCP determine which MCP version it needs
-        uv sync --extra dev --extra community
+        # Install with both dev and community extras, allow prereleases
+        # FastMCP will determine which MCP version it needs
+        uv sync --extra dev --extra community --prerelease allow
 
     - name: Show installed versions
       run: |
         echo "Installed package versions:"
         uv pip show mcp | grep "Version:" || echo "MCP not found"
         uv pip show fastmcp | grep "Version:" || echo "FastMCP not found"
+        echo ""
+        echo "Full MCP package info:"
+        uv pip show mcp || echo "MCP package details not available"
 
-    - name: Run community FastMCP tests with version ${{ matrix.fastmcp-version }}
+    - name: Run community FastMCP tests with prerelease version ${{ matrix.fastmcp-version }}
       run: |
-        echo "Running community FastMCP tests with version ${{ matrix.fastmcp-version }}"
+        echo "Running community FastMCP tests with prerelease version ${{ matrix.fastmcp-version }}"
         set -o pipefail
         uv run pytest -v 2>&1 | tee pytest.log
 
@@ -150,16 +134,17 @@ jobs:
       if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: compat-failure-fastmcp-${{ matrix.fastmcp-version }}
+        name: prerelease-failure-fastmcp-${{ matrix.fastmcp-version }}
         path: failure.json
         retention-days: 7
 
-  test-without-fastmcp:
+  test-mcp-prerelease:
     runs-on: ubuntu-latest
-    needs: discover-mcp-versions
+    needs: discover-mcp-prereleases
+    if: needs.discover-mcp-prereleases.outputs.has-prereleases == 'true'
     strategy:
       matrix:
-        mcp-version: ${{ fromJson(needs.discover-mcp-versions.outputs.mcp-versions) }}
+        mcp-version: ${{ fromJson(needs.discover-mcp-prereleases.outputs.mcp-prereleases) }}
       fail-fast: false
 
     steps:
@@ -175,7 +160,7 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Install dependencies with MCP ${{ matrix.mcp-version }} (no FastMCP)
+    - name: Install dependencies with prerelease MCP ${{ matrix.mcp-version }} (no FastMCP)
       run: |
         # Create virtual environment
         uv venv
@@ -183,8 +168,8 @@ jobs:
         # Install base dependencies first
         uv pip install pydantic>=2.0.0 requests>=2.31.0 mcpcat-api==0.1.4
 
-        # Install the specific MCP version
-        uv pip install "mcp==${{ matrix.mcp-version }}"
+        # Install the specific MCP prerelease version
+        uv pip install "mcp==${{ matrix.mcp-version }}" --prerelease=allow
 
         # Install dev dependencies for testing
         uv pip install pytest>=7.0.0 pytest-asyncio>=0.21.0 mypy>=1.0.0 ruff>=0.1.0 freezegun>=1.2.0
@@ -195,23 +180,26 @@ jobs:
         # Install the package itself in editable mode
         uv pip install -e .
 
-    - name: Show installed MCP version
-      run: |
-        echo "Installed MCP version:"
-        uv pip show mcp | grep "Version:" || echo "MCP not found"
-
     - name: Verify FastMCP is not installed
       run: |
         if uv pip show fastmcp 2>/dev/null; then
-          echo "ERROR: fastmcp should not be installed"
+          echo "ERROR: fastmcp should not be installed for MCP-only tests"
           exit 1
         else
           echo "✓ Confirmed: fastmcp is not installed"
         fi
 
-    - name: Run tests without community FastMCP
+    - name: Show installed MCP version
       run: |
-        echo "Running tests with MCP ${{ matrix.mcp-version }} (no community FastMCP)"
+        echo "Installed MCP version:"
+        uv pip show mcp | grep "Version:" || echo "MCP not found"
+        echo ""
+        echo "Full MCP package info:"
+        uv pip show mcp || echo "MCP package details not available"
+
+    - name: Run tests with prerelease MCP ${{ matrix.mcp-version }}
+      run: |
+        echo "Running tests with prerelease MCP version ${{ matrix.mcp-version }} (no FastMCP)"
         # Run all tests except community tests
         set -o pipefail
         uv run pytest -v 2>&1 | tee pytest.log
@@ -228,20 +216,20 @@ jobs:
       if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: compat-failure-mcp-${{ matrix.mcp-version }}
+        name: prerelease-failure-mcp-${{ matrix.mcp-version }}
         path: failure.json
         retention-days: 7
 
   send-failure-notification:
     runs-on: ubuntu-latest
-    needs: [discover-mcp-versions, discover-fastmcp-versions, test-fastmcp-compatibility, test-without-fastmcp]
+    needs: [discover-mcp-prereleases, discover-fastmcp-prereleases, test-fastmcp-prerelease, test-mcp-prerelease]
     if: failure()
 
     steps:
     - name: Download failure details
       uses: actions/download-artifact@v4
       with:
-        pattern: compat-failure-*
+        pattern: prerelease-failure-*
         path: failure_artifacts
         merge-multiple: true
         if-no-files-found: ignore
@@ -274,27 +262,18 @@ jobs:
         # Set API key without printing it
         resend.api_key = api_key
 
-        # Determine context
+        # Determine which tests failed
         workflow_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
 
-        # Determine trigger context
-        trigger_info = ''
-        if '${{ github.event_name }}' == 'push':
-            trigger_info = '<li>Triggered by: Push to ${{ github.ref }}</li>'
-        elif '${{ github.event_name }}' == 'pull_request':
-            trigger_info = '<li>Triggered by: Pull Request</li>'
-        elif '${{ github.event_name }}' == 'schedule':
-            trigger_info = '<li>Triggered by: Weekly Schedule</li>'
-        else:
-            trigger_info = '<li>Triggered by: ${{ github.event_name }}</li>'
+        # Get the prerelease versions that were being tested
+        mcp_prereleases = '${{ needs.discover-mcp-prereleases.outputs.mcp-prereleases }}'
+        fastmcp_prereleases = '${{ needs.discover-fastmcp-prereleases.outputs.fastmcp-prereleases }}'
+        has_mcp_prereleases = '${{ needs.discover-mcp-prereleases.outputs.has-prereleases }}'
+        has_fastmcp_prereleases = '${{ needs.discover-fastmcp-prereleases.outputs.has-prereleases }}'
 
-        # Get the versions that were being tested
-        mcp_versions = '${{ needs.discover-mcp-versions.outputs.mcp-versions }}'
-        fastmcp_versions = '${{ needs.discover-fastmcp-versions.outputs.fastmcp-versions }}'
-
-        def parse_versions(raw: str, label: str) -> list[str]:
+        def parse_versions(raw: str, label: str, enabled: bool) -> list[str]:
             raw = (raw or '').strip()
-            if not raw:
+            if not raw or not enabled:
                 return []
 
             try:
@@ -322,17 +301,24 @@ jobs:
             )
             return []
 
-        mcp_list = parse_versions(mcp_versions, 'MCP versions')
-        fastmcp_list = parse_versions(fastmcp_versions, 'FastMCP versions')
+        mcp_list = parse_versions(
+            mcp_prereleases,
+            'MCP prereleases',
+            has_mcp_prereleases == 'true'
+        )
+        fastmcp_list = parse_versions(
+            fastmcp_prereleases,
+            'FastMCP prereleases',
+            has_fastmcp_prereleases == 'true'
+        )
         print(
-            f'Using {len(mcp_list)} MCP versions and '
-            f'{len(fastmcp_list)} FastMCP versions'
+            f'Using {len(mcp_list)} MCP prereleases and '
+            f'{len(fastmcp_list)} FastMCP prereleases'
         )
 
         # Format version lists
-        mcp_versions_html = '<br>'.join([f'  • MCP {v}' for v in mcp_list]) if mcp_list else 'No versions tested'
-        fastmcp_versions_html = '<br>'.join([f'  • FastMCP {v}' for v in fastmcp_list]) if fastmcp_list else 'No versions tested'
-        print(f'Formatted HTML lists with {len(mcp_list)} MCP and {len(fastmcp_list)} FastMCP versions')
+        mcp_versions_html = '<br>'.join([f'  • MCP {v}' for v in mcp_list]) if mcp_list else 'No MCP prereleases tested'
+        fastmcp_versions_html = '<br>'.join([f'  • FastMCP {v}' for v in fastmcp_list]) if fastmcp_list else 'No FastMCP prereleases tested'
 
         failure_dir = Path('failure_artifacts')
         failure_details = []
@@ -364,13 +350,13 @@ jobs:
         failing_sections = []
         if failing_mcp:
             failing_sections.append(
-                '<p><strong>MCP Versions Failing:</strong><br>'
+                '<p><strong>MCP Prerelease Versions Failing:</strong><br>'
                 + '<br>'.join([f'  • MCP {version}' for version in failing_mcp])
                 + '</p>'
             )
         if failing_fastmcp:
             failing_sections.append(
-                '<p><strong>FastMCP Versions Failing:</strong><br>'
+                '<p><strong>FastMCP Prerelease Versions Failing:</strong><br>'
                 + '<br>'.join([f'  • FastMCP {version}' for version in failing_fastmcp])
                 + '</p>'
             )
@@ -391,19 +377,19 @@ jobs:
         if failing_fastmcp:
             subject_parts.append('FastMCP ' + ', '.join(failing_fastmcp))
         subject_suffix = ' | '.join(subject_parts) if subject_parts else 'See workflow logs'
-        subject_line = f'🚨 MCPCat Compatibility Tests Failed - {subject_suffix}'
+        subject_line = f'⚠️ MCPCat Prerelease Tests Failed - {subject_suffix}'
         print(f'Email subject suffix: {subject_suffix}')
 
         email_html = f'''
-        <h2>🚨 MCPCat Compatibility Tests Failed</h2>
+        <h2>⚠️ MCPCat Prerelease Compatibility Tests Failed</h2>
 
-        <p>The MCP/FastMCP compatibility tests have failed in the main workflow. This requires immediate attention.</p>
+        <p>The prerelease compatibility tests have failed. This may indicate upcoming breaking changes in MCP or FastMCP.</p>
 
         <h3>Details:</h3>
         <ul>
           <li>Workflow: ${{ github.workflow }}</li>
           <li>Repository: ${{ github.repository }}</li>
-          {trigger_info}
+          <li>Branch: ${{ github.ref }}</li>
           <li>Run ID: ${{ github.run_id }}</li>
         </ul>
 
@@ -412,23 +398,19 @@ jobs:
         <h3>Failing Versions:</h3>
         {failing_versions_html}
 
-        <h3>Versions Tested:</h3>
-        <p><strong>MCP Versions (without FastMCP):</strong><br>
+        <h3>Prerelease Versions Tested:</h3>
+        <p><strong>MCP Prerelease Versions:</strong><br>
         {mcp_versions_html}</p>
 
-        <p><strong>FastMCP Versions (with MCP dependencies):</strong><br>
+        <p><strong>FastMCP Prerelease Versions:</strong><br>
         {fastmcp_versions_html}</p>
 
-        <h3>Impact:</h3>
-        <p>This failure indicates compatibility issues with one or more of the tested versions.</p>
-        <p>Check the workflow run for specific failing combinations.</p>
-
-        <h3>Action Required:</h3>
+        <h3>What to check:</h3>
         <ul>
-          <li>Review the specific test failures in the workflow</li>
-          <li>Identify which version combinations are failing</li>
-          <li>Check for breaking changes in dependencies</li>
-          <li>Fix compatibility issues before merging</li>
+          <li>Review the specific failing versions in the workflow</li>
+          <li>Check for deprecation warnings or breaking changes</li>
+          <li>Update compatibility if needed before the stable release</li>
+          <li>Consider if changes are needed to support upcoming versions</li>
         </ul>
         '''
 
@@ -441,9 +423,8 @@ jobs:
             'subject': subject_line,
             'html': email_html,
             'tags': [
-                {'name': 'alert_type', 'value': 'compatibility_failure'},
-                {'name': 'repository', 'value': repo_tag},
-                {'name': 'severity', 'value': 'high'}
+                {'name': 'alert_type', 'value': 'prerelease_failure'},
+                {'name': 'repository', 'value': repo_tag}
             ]
         }
 
@@ -474,53 +455,70 @@ jobs:
         RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
 
-  report-compatibility:
+  report-prerelease-compatibility:
     runs-on: ubuntu-latest
-    needs: [discover-mcp-versions, discover-fastmcp-versions, test-fastmcp-compatibility, test-without-fastmcp, send-failure-notification]
+    needs: [discover-mcp-prereleases, discover-fastmcp-prereleases, test-fastmcp-prerelease, test-mcp-prerelease, send-failure-notification]
     if: always()
 
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Print compatibility report
+    - name: Generate Prerelease Compatibility Report
       run: |
         echo "=========================================="
-        echo "     MCP VERSION COMPATIBILITY REPORT    "
+        echo "   🔬 PRERELEASE COMPATIBILITY REPORT    "
         echo "=========================================="
         echo ""
-        echo "This report shows the compatibility status of MCPCat with different MCP and FastMCP versions."
+        echo "⚠️  PRERELEASE VERSION TESTING ⚠️"
+        echo "This report shows compatibility with PRERELEASE versions"
+        echo "which may be unstable or have breaking changes."
         echo ""
         echo "Generated on: $(date)"
         echo ""
-        echo "📋 OFFICIAL MCP COMPATIBILITY (without community FastMCP)"
-        echo "─────────────────────────────────────────"
-        echo "MCP versions tested: ${{ needs.discover-mcp-versions.outputs.mcp-versions }}"
-        echo "Tests run: All tests except community FastMCP tests"
-        echo "Python version: 3.12"
+
+        echo "📦 MCP PRERELEASE STATUS"
+        echo "────────────────────────────────────────"
+        if [ "${{ needs.discover-mcp-prereleases.outputs.has-prereleases }}" == "true" ]; then
+          echo "Prerelease versions tested: ${{ needs.discover-mcp-prereleases.outputs.mcp-prereleases }}"
+          echo "Test Status: Check individual job results above"
+        else
+          echo "No MCP prerelease versions currently available"
+        fi
         echo ""
-        echo "📋 COMMUNITY FASTMCP COMPATIBILITY TESTING"
-        echo "─────────────────────────────────────────"
-        echo "FastMCP versions tested: ${{ needs.discover-fastmcp-versions.outputs.fastmcp-versions }}"
-        echo "MCP version: Determined by each FastMCP version's requirements"
-        echo "Tests run: Community FastMCP tests only"
-        echo "Python version: 3.12"
+
+        echo "📦 FASTMCP PRERELEASE STATUS"
+        echo "────────────────────────────────────────"
+        if [ "${{ needs.discover-fastmcp-prereleases.outputs.has-prereleases }}" == "true" ]; then
+          echo "Prerelease versions tested: ${{ needs.discover-fastmcp-prereleases.outputs.fastmcp-prereleases }}"
+          echo "Test Status: Check individual job results above"
+          echo "Note: FastMCP determines its own MCP dependency version"
+        else
+          echo "No FastMCP prerelease versions currently available"
+        fi
         echo ""
-        echo "🧪 TEST COVERAGE"
-        echo "─────────────────────────────────────────"
-        echo "✓ Official FastMCP (mcp.server.fastmcp) compatibility"
-        echo "✓ Community FastMCP (fastmcp package) compatibility - optional dependency"
-        echo "✓ Low-level Server compatibility"
-        echo "✓ All implementations tested with is_compatible_server function"
-        echo "✓ Package works without community FastMCP (using only official MCP)"
+
+        echo "🔍 TEST CONFIGURATION"
+        echo "────────────────────────────────────────"
+        echo "• Python version: 3.12"
+        echo "• Email alerts: Sent on failure via Resend"
+        echo "• MCP dependency: >=1.2.0 (flexible, FastMCP determines actual version)"
         echo ""
-        echo "📦 INSTALLATION OPTIONS"
-        echo "─────────────────────────────────────────"
-        echo "• pip install mcpcat          - Official MCP only (includes mcp.server.fastmcp)"
-        echo "• pip install mcpcat[community] - Adds community FastMCP support"
+
+        echo "📊 HOW TO INTERPRET RESULTS"
+        echo "────────────────────────────────────────"
+        echo "✅ PASSED - Prerelease is compatible"
+        echo "❌ FAILED - Prerelease has compatibility issues"
         echo ""
-        echo "📊 RESULTS"
-        echo "─────────────────────────────────────────"
-        echo "Check the individual test job results above for detailed compatibility status."
-        echo "Each MCP and FastMCP version was tested in separate matrix jobs."
+        echo "Failed tests will trigger email notifications for early warning"
+        echo "about upcoming compatibility changes in MCP/FastMCP prereleases."
         echo ""
+
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "📝 MANUAL RUN DETAILS"
+          echo "────────────────────────────────────────"
+          echo "Triggered manually via workflow_dispatch"
+          if [ -n "${{ github.event.inputs.test_specific_version }}" ]; then
+            echo "Specific version requested: ${{ github.event.inputs.test_specific_version }}"
+          fi
+          echo ""
+        fi
+
         echo "=========================================="

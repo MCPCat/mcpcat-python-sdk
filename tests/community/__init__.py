@@ -1,0 +1,1 @@
+"""Community FastMCP test suite."""

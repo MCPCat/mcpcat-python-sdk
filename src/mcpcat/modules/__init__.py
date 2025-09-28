@@ -1,6 +1,6 @@
 """MCPCat modules."""
 
-from .compatibility import is_compatible_server, is_fastmcp_server
+from .compatibility import is_compatible_server, is_official_fastmcp_server
 from .context_parameters import (
     add_context_parameter_to_schema,
     add_context_parameter_to_tools,
@@ -12,7 +12,7 @@ from .tools import handle_report_missing
 __all__ = [
     # Compatibility
     "is_compatible_server",
-    "is_fastmcp_server",
+    "is_official_fastmcp_server",
     # Context parameters
     "add_context_parameter_to_schema",
     "add_context_parameter_to_tools",

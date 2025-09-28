@@ -9,7 +9,12 @@ from mcpcat.modules.session import (
     new_session_id,
 )
 
-from .modules.compatibility import is_compatible_server, is_fastmcp_server
+from .modules.compatibility import (
+    is_community_fastmcp_server,
+    is_compatible_server,
+    is_official_fastmcp_server,
+    COMPATIBILITY_ERROR_MESSAGE,
+)
 from .modules.internal import set_server_tracking_data
 from .modules.logging import write_to_log, set_debug_mode
 from .types import (
@@ -55,12 +60,13 @@ def track(
 
     # Validate server compatibility
     if not is_compatible_server(server):
-        raise TypeError(
-            "Server must be a FastMCP instance or MCP Low-level Server instance"
-        )
+        raise TypeError(COMPATIBILITY_ERROR_MESSAGE)
 
     lowlevel_server = server
-    is_fastmcp = is_fastmcp_server(server)
+    is_fastmcp = is_official_fastmcp_server(server) or is_community_fastmcp_server(server)
+    is_official_fastmcp = is_official_fastmcp_server(server)
+    is_community_fastmcp = is_community_fastmcp_server(server)
+
     if is_fastmcp:
         lowlevel_server = server._mcp_server
 
@@ -88,7 +94,7 @@ def track(
 
     try:
         # Always initialize dynamic tracking for complete tool coverage
-        from mcpcat.modules.overrides.monkey_patch import apply_monkey_patches
+        from mcpcat.modules.overrides.official.monkey_patch import apply_official_fastmcp_patches
 
         # Initialize the dynamic tracking system by setting the flag
         if not data.tracker_initialized:
@@ -98,15 +104,20 @@ def track(
             )
 
         # Apply appropriate tracking method based on server type
-        if is_fastmcp:
+        if is_official_fastmcp:
             # For FastMCP servers, use monkey-patching for tool tracking
-            apply_monkey_patches(server, data)
+            apply_official_fastmcp_patches(server, data)
             # Only apply minimal overrides for non-tool events (like initialize, list_tools display)
             from mcpcat.modules.overrides.mcp_server import (
                 override_lowlevel_mcp_server_minimal,
             )
 
             override_lowlevel_mcp_server_minimal(lowlevel_server, data)
+        elif is_community_fastmcp:
+            # For community FastMCP servers, use community-specific patches
+            from mcpcat.modules.overrides.community.monkey_patch import patch_community_fastmcp
+            patch_community_fastmcp(server)
+            write_to_log(f"Applied community FastMCP patches for server {id(server)}")
         else:
             # For low-level servers, use the traditional overrides (no monkey patching needed)
             override_lowlevel_mcp_server(lowlevel_server, data)

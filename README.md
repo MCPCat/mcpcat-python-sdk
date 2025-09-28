@@ -35,7 +35,11 @@ MCPcat is an analytics platform for MCP server owners 🐱. It captures user int
 This SDK also provides a free and simple way to forward telemetry like logs, traces, and errors to any Open Telemetry collector or popular tools like Datadog and Sentry. 
 
 ```bash
+# Basic installation (includes official MCP SDK)
 pip install mcpcat
+
+# With Jlowin's/Prefect's FastMCP support
+pip install "mcpcat[community]"
 ```
 
 To learn more about us, check us out [here](https://mcpcat.io)

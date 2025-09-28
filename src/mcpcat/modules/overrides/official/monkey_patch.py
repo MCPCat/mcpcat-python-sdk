@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, List, Optional
 
 from mcpcat.modules import event_queue
-from mcpcat.modules.compatibility import is_fastmcp_server, is_mcp_error_response
+from mcpcat.modules.compatibility import is_official_fastmcp_server, is_mcp_error_response
 from mcpcat.modules.internal import (
     get_original_method,
     get_server_tracking_data,
@@ -26,7 +26,7 @@ from mcpcat.modules.session import (
 )
 from mcpcat.types import EventType, MCPCatData, UnredactedEvent
 
-from .mcp_server import safe_request_context
+from ..mcp_server import safe_request_context
 
 
 def get_current_mcpcat_data(server: Any, fallback: MCPCatData) -> MCPCatData:
@@ -47,7 +47,7 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
     """
     try:
         # Check if this is a FastMCP server (which now includes _tool_manager check)
-        if not is_fastmcp_server(server):
+        if not is_official_fastmcp_server(server):
             return False
 
         tool_manager = server._tool_manager
@@ -494,7 +494,7 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
         return False
 
 
-def apply_monkey_patches(server: Any, mcpcat_data: MCPCatData) -> bool:
+def apply_official_fastmcp_patches(server: Any, mcpcat_data: MCPCatData) -> bool:
     """Apply monkey patches for FastMCP servers only.
 
     Args:
@@ -512,7 +512,7 @@ def apply_monkey_patches(server: Any, mcpcat_data: MCPCatData) -> bool:
         return False
 
     # Only patch FastMCP servers
-    if is_fastmcp_server(server):
+    if is_official_fastmcp_server(server):
         if patch_fastmcp_tool_manager(server, mcpcat_data):
             write_to_log(
                 f"Monkey patches applied successfully to FastMCP server {id(server)}"

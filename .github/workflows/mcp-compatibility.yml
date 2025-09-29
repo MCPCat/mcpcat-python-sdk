@@ -59,12 +59,18 @@ jobs:
         # Get all available versions from PyPI
         versions=$(pip index versions fastmcp 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | sort -V)
 
-        # Filter to versions >= 2.7.0 and get only latest patch version for each minor
+        # Filter to versions >= 2.7.0, exclude 2.9.*, and get only latest patch version for each minor
         declare -A latest_minor
         for version in $versions; do
           major=$(echo $version | cut -d. -f1)
           minor=$(echo $version | cut -d. -f2)
           patch=$(echo $version | cut -d. -f3)
+
+          # Skip 2.9.* versions (known compatibility issues)
+          if [ "$major" -eq 2 ] && [ "$minor" -eq 9 ]; then
+            echo "Skipping FastMCP $version (2.9.* versions have known issues)"
+            continue
+          fi
 
           # Include if version >= 2.7.0
           if [ "$major" -gt 2 ] || ([ "$major" -eq 2 ] && [ "$minor" -ge 7 ]); then

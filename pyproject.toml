@@ -1,6 +1,6 @@
 [project]
 name = "mcpcat"
-version = "0.1.7"
+version = "0.1.8"
 description = "Analytics Tool for MCP Servers - provides insights into MCP tool usage patterns"
 authors = [
     { name = "MCPCat", email = "support@mcpcat.io" },
@@ -31,7 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 community = [
-    "fastmcp>=2.7.0",
+    "fastmcp>=2.7.0,!=2.9.*",
 ]
 dev = [
     "pytest>=7.0.0",

@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional, Set, TypedDict, Literal, Union
 from mcpcat_api import PublishEventRequest
 from pydantic import BaseModel
 
+from mcpcat.modules.constants import DEFAULT_CONTEXT_DESCRIPTION
+
 # Type alias for identify function
 IdentifyFunction = Callable[[dict[str, Any], Any], Optional["UserIdentity"]]
 # Type alias for redaction function
@@ -119,6 +121,7 @@ class MCPCatOptions:
     enable_report_missing: bool = True
     enable_tracing: bool = True
     enable_tool_call_context: bool = True
+    custom_context_description: str = DEFAULT_CONTEXT_DESCRIPTION
     identify: IdentifyFunction | None = None
     redact_sensitive_information: RedactionFunction | None = None
     exporters: dict[str, ExporterConfig] | None = None

@@ -30,35 +30,39 @@ class MCPServerProtocol(Protocol):
 
 def is_community_fastmcp_server(server: Any) -> bool:
     """Check if the server is a community FastMCP instance.
-    
+
     Community FastMCP comes from the 'fastmcp' package.
+    Supports FastMCP subclasses like FastMCPOpenAPI, FastMCPProxy, etc.
     """
     # Check by class name and module
     class_name = server.__class__.__name__
     module_name = server.__class__.__module__
-    
-    # Community FastMCP has class name 'FastMCP' and module starts with 'fastmcp'
+
+    # Community FastMCP has class name containing 'FastMCP' and module starts with 'fastmcp'
+    # This supports FastMCPOpenAPI, FastMCPProxy, and other subclasses
     return (
-        class_name == "FastMCP" and 
+        "FastMCP" in class_name and
         module_name.startswith("fastmcp") and
-        hasattr(server, "_mcp_server") and 
+        hasattr(server, "_mcp_server") and
         hasattr(server, "_tool_manager")
     )
 
 def is_official_fastmcp_server(server: Any) -> bool:
     """Check if the server is an official FastMCP instance.
-    
+
     Official FastMCP comes from the 'mcp.server.fastmcp' module.
+    Supports FastMCP subclasses like FastMCPOpenAPI, FastMCPProxy, etc.
     """
     # Check by class name and module
     class_name = server.__class__.__name__
     module_name = server.__class__.__module__
-    
-    # Official FastMCP has class name 'FastMCP' and module 'mcp.server.fastmcp'
+
+    # Official FastMCP has class name containing 'FastMCP' and module 'mcp.server.fastmcp'
+    # This supports FastMCPOpenAPI, FastMCPProxy, and other subclasses
     return (
-        class_name == "FastMCP" and 
+        "FastMCP" in class_name and
         module_name.startswith("mcp.server.fastmcp") and
-        hasattr(server, "_mcp_server") and 
+        hasattr(server, "_mcp_server") and
         hasattr(server, "_tool_manager")
     )
 

@@ -3,7 +3,9 @@
 from typing import Any
 
 
-def add_context_parameter_to_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def add_context_parameter_to_tools(
+    tools: list[dict[str, Any]], custom_context_description: str
+) -> list[dict[str, Any]]:
     """Add context parameter to tool schemas."""
     modified_tools = []
 
@@ -13,7 +15,7 @@ def add_context_parameter_to_tools(tools: list[dict[str, Any]]) -> list[dict[str
 
         if "inputSchema" in modified_tool:
             modified_tool["inputSchema"] = add_context_parameter_to_schema(
-                modified_tool["inputSchema"]
+                modified_tool["inputSchema"], custom_context_description
             )
 
         modified_tools.append(modified_tool)
@@ -21,7 +23,9 @@ def add_context_parameter_to_tools(tools: list[dict[str, Any]]) -> list[dict[str
     return modified_tools
 
 
-def add_context_parameter_to_schema(schema: dict[str, Any]) -> dict[str, Any]:
+def add_context_parameter_to_schema(
+    schema: dict[str, Any], custom_context_description: str
+) -> dict[str, Any]:
     """Add context parameter to a JSON schema."""
     # Create a copy to avoid modifying original
     modified_schema = schema.copy()
@@ -36,7 +40,7 @@ def add_context_parameter_to_schema(schema: dict[str, Any]) -> dict[str, Any]:
     # Add context parameter
     modified_schema["properties"]["context"] = {
         "type": "string",
-        "description": "Describe why you are calling this tool and how it fits into your overall task",
+        "description": custom_context_description,
     }
 
     # Add to required fields

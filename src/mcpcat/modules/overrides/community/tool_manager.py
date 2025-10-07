@@ -79,6 +79,7 @@ def patch_community_fastmcp_tool_manager(server: Any) -> None:
 def patch_existing_tools(server: FastMCP) -> None:
     """Modify existing tools to include the context parameter."""
     try:
+        data = get_server_tracking_data(server._mcp_server)
         tool_manager = server._tool_manager
         if not hasattr(tool_manager, "_tools"):
             write_to_log("No _tools dictionary found on tool manager")
@@ -102,7 +103,7 @@ def patch_existing_tools(server: FastMCP) -> None:
             # Always overwrite the context property with MCPCat's version
             tool.parameters["properties"]["context"] = {
                 "type": "string",
-                "description": "Describe why you are calling this tool and how it fits into your overall task"
+                "description": data.options.custom_context_description,
             }
 
             # Add to required array
@@ -168,7 +169,7 @@ def patch_add_tool_fn(server: FastMCP) -> None:
                         # Always overwrite the context property with MCPCat's version
                         tool.parameters["properties"]["context"] = {
                             "type": "string",
-                            "description": "Describe why you are calling this tool and how it fits into your overall task"
+                            "description": data.options.custom_context_description
                         }
 
                         # Add to required array

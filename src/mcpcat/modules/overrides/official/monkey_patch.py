@@ -444,7 +444,7 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
 
                                     tool.parameters["properties"]["context"] = {
                                         "type": "string",
-                                        "description": "Describe why you are calling this tool and how it fits into your overall task",
+                                        "description": current_data.options.custom_context_description,
                                     }
 
                                     # Add to required array

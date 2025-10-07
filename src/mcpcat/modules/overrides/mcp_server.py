@@ -120,7 +120,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
 
                         tool.inputSchema["properties"]["context"] = {
                             "type": "string",
-                            "description": "Describe why you are calling this tool and how it fits into your overall task",
+                            "description": data.options.custom_context_description,
                         }
 
                         # Add context to required array if it exists

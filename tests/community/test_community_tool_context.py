@@ -368,6 +368,215 @@ class TestCommunityToolContext:
             )
             assert "Processed: test" in str(result)
 
+    @pytest.mark.asyncio
+    async def test_custom_context_description(self):
+        """Test that custom context description is correctly applied in community FastMCP."""
+        server = create_community_todo_server()
+        custom_description = "Explain why you need to use this tool"
+        options = MCPCatOptions(
+            enable_tool_call_context=True,
+            custom_context_description=custom_description
+        )
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            # Check each tool (except get_more_tools)
+            for tool in tools_result:
+                if tool.name == "get_more_tools":
+                    continue
+
+                # Verify context parameter has custom description
+                context_schema = tool.inputSchema["properties"]["context"]
+                assert context_schema["description"] == custom_description
+
+    @pytest.mark.asyncio
+    async def test_custom_context_description_empty_string(self):
+        """Test edge case with empty string custom description in community FastMCP."""
+        server = create_community_todo_server()
+        options = MCPCatOptions(
+            enable_tool_call_context=True,
+            custom_context_description=""
+        )
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            # Find a tool to test
+            add_todo_tool = next(t for t in tools_result if t.name == "add_todo")
+
+            # Verify context exists with empty description
+            context_schema = add_todo_tool.inputSchema["properties"]["context"]
+            assert context_schema["description"] == ""
+            assert context_schema["type"] == "string"
+
+    @pytest.mark.asyncio
+    async def test_custom_context_description_special_characters(self):
+        """Test custom description with special characters and Unicode in community FastMCP."""
+        server = create_community_todo_server()
+        special_description = "Why use this? 🚀 Include: 'quotes', \"double\", newlines\n, tabs\t."
+        options = MCPCatOptions(
+            enable_tool_call_context=True,
+            custom_context_description=special_description
+        )
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            # Verify special characters are preserved
+            add_todo_tool = next(t for t in tools_result if t.name == "add_todo")
+            context_schema = add_todo_tool.inputSchema["properties"]["context"]
+            assert context_schema["description"] == special_description
+
+    @pytest.mark.asyncio
+    async def test_custom_context_description_very_long(self):
+        """Test with a very long description string in community FastMCP."""
+        server = create_community_todo_server()
+        # Create a very long description
+        long_description = "This is a very detailed description for the context. " * 50
+        options = MCPCatOptions(
+            enable_tool_call_context=True,
+            custom_context_description=long_description
+        )
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            # Verify long description is preserved
+            add_todo_tool = next(t for t in tools_result if t.name == "add_todo")
+            context_schema = add_todo_tool.inputSchema["properties"]["context"]
+            assert context_schema["description"] == long_description
+            assert len(context_schema["description"]) > 1000
+
+    @pytest.mark.asyncio
+    async def test_default_context_description(self):
+        """Verify the default description is used when not specified in community FastMCP."""
+        server = create_community_todo_server()
+        # Don't specify custom_context_description, should use default
+        options = MCPCatOptions(enable_tool_call_context=True)
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            # Check for default description
+            add_todo_tool = next(t for t in tools_result if t.name == "add_todo")
+            context_schema = add_todo_tool.inputSchema["properties"]["context"]
+            assert context_schema["description"] == "Describe why you are calling this tool and how it fits into your overall task"
+
+    @pytest.mark.asyncio
+    async def test_custom_context_description_with_multiple_tools(self):
+        """Test that custom description is applied to all tools consistently in community FastMCP."""
+        if not HAS_COMMUNITY_FASTMCP:
+            pytest.skip("Community FastMCP not available")
+
+        from fastmcp import FastMCP
+
+        server = FastMCP("test-server")
+
+        @server.tool
+        def tool1(param: str):
+            """First tool."""
+            return f"Tool 1: {param}"
+
+        @server.tool
+        def tool2(value: int):
+            """Second tool."""
+            return f"Tool 2: {value}"
+
+        @server.tool
+        def tool3():
+            """Third tool with no params."""
+            return "Tool 3"
+
+        custom_desc = "Custom community context for all tools"
+        options = MCPCatOptions(
+            enable_tool_call_context=True,
+            custom_context_description=custom_desc
+        )
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            # All tools should have the same custom context description
+            for tool in tools_result:
+                if tool.name in ["tool1", "tool2", "tool3"]:
+                    assert "context" in tool.inputSchema["properties"]
+                    assert tool.inputSchema["properties"]["context"]["description"] == custom_desc
+
+    @pytest.mark.asyncio
+    async def test_custom_context_with_tool_call(self):
+        """Test tool calls work correctly with custom context description in community FastMCP."""
+        server = create_community_todo_server()
+        custom_desc = "Provide reasoning for this action in the community server"
+        options = MCPCatOptions(
+            enable_tool_call_context=True,
+            custom_context_description=custom_desc
+        )
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            # Verify the custom description is set
+            tools_result = await client.list_tools()
+            add_todo_tool = next(t for t in tools_result if t.name == "add_todo")
+            assert add_todo_tool.inputSchema["properties"]["context"]["description"] == custom_desc
+
+            # Call the tool with context
+            result = await client.call_tool(
+                "add_todo",
+                {
+                    "text": "Test with custom description in community",
+                    "context": "Adding todo to test custom context description in community FastMCP"
+                }
+            )
+
+            # Should succeed
+            assert "Added todo" in str(result)
+
+    @pytest.mark.asyncio
+    async def test_custom_context_with_dynamically_added_tool(self):
+        """Test that dynamically added tools get custom context description in community FastMCP."""
+        if not HAS_COMMUNITY_FASTMCP:
+            pytest.skip("Community FastMCP not available")
+
+        from fastmcp import FastMCP
+
+        server = FastMCP("test-server")
+
+        # Track with custom context description
+        custom_desc = "Dynamic tool custom context"
+        options = MCPCatOptions(
+            enable_tool_call_context=True,
+            custom_context_description=custom_desc
+        )
+        track(server, "test_project", options)
+
+        # Add tool AFTER tracking
+        @server.tool
+        def dynamic_tool(data: str):
+            """Tool added after tracking with custom context."""
+            return f"Dynamic result: {data}"
+
+        async with create_community_test_client(server) as client:
+            tools_result = await client.list_tools()
+            dynamic_tool_def = next(t for t in tools_result if t.name == "dynamic_tool")
+
+            # Should have context parameter with custom description
+            assert "context" in dynamic_tool_def.inputSchema["properties"]
+            assert dynamic_tool_def.inputSchema["properties"]["context"]["description"] == custom_desc
+
+            # Test calling it
+            result = await client.call_tool(
+                "dynamic_tool",
+                {"data": "test", "context": "Using dynamic tool with custom context"}
+            )
+            assert "Dynamic result: test" in str(result)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

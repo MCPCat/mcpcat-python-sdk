@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import Tool
 
 from mcpcat import MCPCatOptions, track
+from mcpcat.modules.constants import DEFAULT_CONTEXT_DESCRIPTION
 
 from .test_utils.client import create_test_client
 from .test_utils.todo_server import create_todo_server
@@ -40,7 +41,7 @@ class TestToolContext:
                 assert context_schema["type"] == "string"
                 assert (
                     context_schema["description"]
-                    == "Describe why you are calling this tool and how it fits into your overall task"
+                    == DEFAULT_CONTEXT_DESCRIPTION
                 )
 
     @pytest.mark.asyncio
@@ -319,7 +320,7 @@ class TestToolContext:
             desc = context_schema.get("description", "")
             if (
                 desc
-                == "Describe why you are calling this tool and how it fits into your overall task"
+                == DEFAULT_CONTEXT_DESCRIPTION
             ):
                 # Our description was added - this means the implementation overwrote it
                 # This happens because the check is at the property level not parameter level
@@ -705,7 +706,7 @@ class TestToolContext:
             # Check for default description
             add_todo_tool = next(t for t in tools_result.tools if t.name == "add_todo")
             context_schema = add_todo_tool.inputSchema["properties"]["context"]
-            assert context_schema["description"] == "Describe why you are calling this tool and how it fits into your overall task"
+            assert context_schema["description"] == DEFAULT_CONTEXT_DESCRIPTION
 
     @pytest.mark.asyncio
     async def test_custom_context_description_with_multiple_tools(self):

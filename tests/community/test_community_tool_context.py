@@ -3,6 +3,7 @@
 import pytest
 
 from mcpcat import MCPCatOptions, track
+from mcpcat.modules.constants import DEFAULT_CONTEXT_DESCRIPTION
 
 from ..test_utils.community_client import create_community_test_client
 from ..test_utils.community_todo_server import (
@@ -46,7 +47,7 @@ class TestCommunityToolContext:
                 assert context_schema["type"] == "string"
                 assert (
                     context_schema["description"]
-                    == "Describe why you are calling this tool and how it fits into your overall task"
+                    == DEFAULT_CONTEXT_DESCRIPTION
                 )
 
     @pytest.mark.asyncio
@@ -276,7 +277,7 @@ class TestCommunityToolContext:
             context_schema = tool.inputSchema["properties"]["context"]
             assert (
                 context_schema.get("description")
-                == "Describe why you are calling this tool and how it fits into your overall task"
+                == DEFAULT_CONTEXT_DESCRIPTION
             )
 
             # Should still be in required
@@ -466,7 +467,7 @@ class TestCommunityToolContext:
             # Check for default description
             add_todo_tool = next(t for t in tools_result if t.name == "add_todo")
             context_schema = add_todo_tool.inputSchema["properties"]["context"]
-            assert context_schema["description"] == "Describe why you are calling this tool and how it fits into your overall task"
+            assert context_schema["description"] == DEFAULT_CONTEXT_DESCRIPTION
 
     @pytest.mark.asyncio
     async def test_custom_context_description_with_multiple_tools(self):

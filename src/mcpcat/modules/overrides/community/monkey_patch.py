@@ -12,6 +12,7 @@ from mcp import ServerResult
 
 from mcpcat.modules import event_queue
 from mcpcat.modules.compatibility import is_mcp_error_response
+from mcpcat.modules.exceptions import capture_exception
 from mcpcat.modules.identify import identify_session
 from mcpcat.modules.internal import get_server_tracking_data
 from mcpcat.modules.logging import write_to_log
@@ -19,7 +20,6 @@ from mcpcat.modules.session import (
     get_client_info_from_request_context,
     get_server_session_id,
 )
-from mcpcat.modules.tools import handle_report_missing
 from mcpcat.types import EventType, UnredactedEvent
 
 from ..mcp_server import override_lowlevel_mcp_server_minimal, safe_request_context
@@ -144,7 +144,11 @@ def patch_community_fastmcp(server: Any) -> None:
                 # Check for errors
                 is_error, error_message = is_mcp_error_response(result)
                 event.is_error = is_error
-                event.error = {"message": error_message} if is_error else None
+                # Use full exception capture if there's an error
+                if is_error:
+                    event.error = capture_exception(result)
+                else:
+                    event.error = None
                 event.response = result.model_dump() if result else None
 
                 return result
@@ -152,7 +156,17 @@ def patch_community_fastmcp(server: Any) -> None:
             except Exception as e:
                 write_to_log(f"Error in wrapped_call_tool_handler: {e}")
                 event.is_error = True
-                event.error = {"message": str(e)}
+                # Use full exception capture with stack trace
+                try:
+                    event.error = capture_exception(e)
+                except Exception as capture_err:
+                    # Fallback to simple error if capture fails
+                    write_to_log(f"Error capturing exception: {capture_err}")
+                    event.error = {
+                        "message": str(e),
+                        "type": type(e).__name__,
+                        "platform": "python",
+                    }
                 raise
             finally:
                 # Always publish event if tracing is enabled

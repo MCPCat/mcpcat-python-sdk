@@ -10,12 +10,7 @@ import types
 from typing import Any
 
 from mcpcat.types import ChainedErrorData, ErrorData, StackFrame
-
-# Maximum number of exceptions to capture in a cause chain
-MAX_EXCEPTION_CHAIN_DEPTH = 10
-
-# Maximum number of stack frames to capture per exception
-MAX_STACK_FRAMES = 50
+from mcpcat.modules.constants import MAX_EXCEPTION_CHAIN_DEPTH, MAX_STACK_FRAMES
 
 _captured_error: contextvars.ContextVar[BaseException | None] = contextvars.ContextVar(
     "_captured_error", default=None

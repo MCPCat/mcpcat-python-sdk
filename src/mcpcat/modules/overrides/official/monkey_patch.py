@@ -7,10 +7,16 @@ enabling MCPCat to track tools regardless of when they are registered.
 import inspect
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List
 
 from mcpcat.modules import event_queue
 from mcpcat.modules.compatibility import is_official_fastmcp_server, is_mcp_error_response
+from mcpcat.modules.exceptions import (
+    capture_exception,
+    clear_captured_error,
+    get_captured_error,
+    store_captured_error,
+)
 from mcpcat.modules.internal import (
     get_original_method,
     get_server_tracking_data,
@@ -300,26 +306,48 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                     write_to_log(f"Error preparing arguments: {e}")
                     args_for_tool = arguments  # Use original if modification fails
 
+                # Clear any previous captured error before execution
+                clear_captured_error()
+
                 # Call original method - THIS IS CRITICAL, must not fail
                 if not callable(original_call_tool):
                     write_to_log("Critical: original_call_tool is not callable")
                     raise ValueError("Original call_tool method is not callable")
 
-                result = await original_call_tool(
-                    name, args_for_tool, context=context, **kwargs
-                )
+                # Wrap execution to preserve exceptions before MCP SDK processes them
+                try:
+                    result = await original_call_tool(
+                        name, args_for_tool, context=context, **kwargs
+                    )
+                except Exception as tool_exc:
+                    # Preserve original exception before MCP SDK converts it
+                    store_captured_error(tool_exc)
+                    raise  # Re-raise so MCP SDK can handle it normally
 
                 # Try to capture response in event (non-critical)
                 if event:
                     try:
+                        # Check if result indicates an error (CallToolResult with isError=True)
+                        is_error_result = False
+                        if hasattr(result, "model_dump"):
+                            is_error_result, error_message = is_mcp_error_response(result)
+
+                        if is_error_result:
+                            # MCP SDK converted an exception to CallToolResult
+                            event.is_error = True
+
+                            # Try to use preserved exception first (has full traceback)
+                            captured = get_captured_error()
+                            if captured:
+                                event.error = capture_exception(captured)
+                            else:
+                                # Fallback: extract from CallToolResult
+                                event.error = capture_exception(result)
+
+                        # Capture response data
                         if isinstance(result, tuple):
                             event.response = result[1] if len(result) > 1 else None
                         elif hasattr(result, "model_dump"):
-                            is_error, error_message = is_mcp_error_response(result)
-                            event.is_error = is_error
-                            event.error = (
-                                {"message": error_message} if is_error else None
-                            )
                             event.response = result.model_dump()
                         elif isinstance(result, dict):
                             event.response = result
@@ -347,9 +375,19 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                 if event:
                     try:
                         event.is_error = True
-                        event.error = {"message": str(e)}
-                    except:
-                        pass
+                        # Use full exception capture with stack trace
+                        event.error = capture_exception(e)
+                    except Exception as capture_err:
+                        # Fallback to simple error if capture fails
+                        write_to_log(f"Error capturing exception: {capture_err}")
+                        try:
+                            event.error = {
+                                "message": str(e),
+                                "type": type(e).__name__,
+                                "platform": "python",
+                            }
+                        except:
+                            pass
 
                 # Re-raise to preserve original error behavior
                 raise

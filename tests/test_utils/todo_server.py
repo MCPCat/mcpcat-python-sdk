@@ -1,6 +1,7 @@
 """Todo server implementation for testing."""
 
-from mcp.server import Server
+from mcp.shared.exceptions import McpError
+from mcp.types import ErrorData
 
 try:
     from mcp.server import FastMCP
@@ -9,6 +10,16 @@ try:
 except ImportError:
     FastMCP = None
     HAS_FASTMCP = False
+
+
+# Standard JSON-RPC error codes
+INVALID_PARAMS = -32602
+
+
+class CustomTestError(Exception):
+    """Custom exception type for testing exception capture."""
+
+    pass
 
 
 class Todo:
@@ -64,11 +75,30 @@ def create_todo_server():
 
         raise ValueError(f"Todo with ID {id} not found")
 
+    @server.tool()
+    def tool_that_raises(error_type: str = "value") -> str:
+        """A tool that raises Python exceptions for testing."""
+        if error_type == "value":
+            raise ValueError("Test value error from tool")
+        elif error_type == "runtime":
+            raise RuntimeError("Test runtime error from tool")
+        elif error_type == "custom":
+            raise CustomTestError("Test custom error from tool")
+        return "Should not reach here"
+
+    @server.tool()
+    def tool_with_mcp_error() -> str:
+        """A tool that returns an MCP protocol error."""
+        error = ErrorData(code=INVALID_PARAMS, message="Invalid parameters")
+        raise McpError(error)
+
     # Store original handlers for testing
     server._original_handlers = {
         "add_todo": add_todo,
         "list_todos": list_todos,
         "complete_todo": complete_todo,
+        "tool_that_raises": tool_that_raises,
+        "tool_with_mcp_error": tool_with_mcp_error,
     }
 
     return server

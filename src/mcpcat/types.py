@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Set, TypedDict, Literal, Union
+from typing import Any, Dict, Optional, Set, TypedDict, Literal, Union, NotRequired
 from mcpcat_api import PublishEventRequest
 from pydantic import BaseModel
 
@@ -42,6 +42,37 @@ class SessionInfo(BaseModel):
 
 class Event(PublishEventRequest):
     pass
+
+
+# Error tracking types
+
+class StackFrame(TypedDict, total=False):
+    """Stack frame information for error tracking."""
+    filename: str
+    abs_path: str
+    function: str  # Function name or "<module>"
+    module: str
+    lineno: int
+    in_app: bool
+    context_line: NotRequired[str]
+
+
+class ChainedErrorData(TypedDict, total=False):
+    """Chained exception data (from __cause__ or __context__)."""
+    message: str
+    type: NotRequired[str | None]
+    stack: NotRequired[str]
+    frames: NotRequired[list[StackFrame]]
+
+
+class ErrorData(TypedDict, total=False):
+    """Complete error information for an exception."""
+    message: str
+    type: NotRequired[str | None]  # Exception class name (e.g., "ValueError", "TypeError")
+    stack: NotRequired[str]
+    frames: NotRequired[list[StackFrame]]
+    chained_errors: NotRequired[list[ChainedErrorData]]
+    platform: str  # Platform identifier (always "python")
 
 
 class EventType(str, Enum):

@@ -134,11 +134,14 @@ def filename_for_module(module: str | None, abs_path: str) -> str:
         return abs_path
 
     try:
+        # Convert compiled .pyc files to source .py paths
         if abs_path.endswith(".pyc"):
             abs_path = abs_path[:-1]
 
+        # Extract root package name (e.g., "myapp" from "myapp.views.admin")
         base_module = module.split(".", 1)[0]
 
+        # Single-module case (no dots): just return the filename
         if base_module == module:
             return os.path.basename(abs_path)
 
@@ -149,7 +152,11 @@ def filename_for_module(module: str | None, abs_path: str) -> str:
         if not base_module_file:
             return abs_path
 
+        # Navigate up 2 levels from package's __init__.py to find project root
+        # e.g., /project/myapp/__init__.py → rsplit by separator twice → /project
         base_module_dir = base_module_file.rsplit(os.sep, 2)[0]
+
+        # Extract the path relative to the project root
         if abs_path.startswith(base_module_dir):
             return abs_path.split(base_module_dir, 1)[-1].lstrip(os.sep)
 

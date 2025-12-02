@@ -1,12 +1,14 @@
 """Tests for exception tracking functionality."""
 
 import os
-import sys
 import tempfile
-from typing import Any
+import time
+from unittest.mock import MagicMock
 
 import pytest
 
+from mcpcat import MCPCatOptions, track
+from mcpcat.modules.event_queue import EventQueue, set_event_queue
 from mcpcat.modules.exceptions import (
     capture_exception,
     extract_context_line,
@@ -15,8 +17,10 @@ from mcpcat.modules.exceptions import (
     is_in_app,
     parse_python_traceback,
     stringify_non_exception,
-    unwrap_exception_chain,
 )
+
+from .test_utils.client import create_test_client
+from .test_utils.todo_server import create_todo_server
 
 
 class TestBasicExceptionCapture:
@@ -420,6 +424,248 @@ class TestEdgeCases:
             if e.__traceback__:
                 assert "frames" in error_data
                 assert "stack" in error_data
+
+
+class TestExceptionIntegration:
+    """Integration tests for exception capture with real MCP server calls."""
+
+    @pytest.fixture(autouse=True)
+    def setup_and_teardown(self):
+        """Set up and tear down for each test."""
+        from mcpcat.modules.event_queue import event_queue as original_queue
+
+        yield
+        set_event_queue(original_queue)
+
+    def _create_mock_event_capture(self):
+        """Helper to create mock API client and event capture list."""
+        mock_api_client = MagicMock()
+        captured_events = []
+
+        def capture_event(publish_event_request):
+            captured_events.append(publish_event_request)
+
+        mock_api_client.publish_event = MagicMock(side_effect=capture_event)
+
+        test_queue = EventQueue(api_client=mock_api_client)
+        set_event_queue(test_queue)
+
+        return captured_events
+
+    @pytest.mark.asyncio
+    async def test_tool_raises_value_error(self):
+        """Test that ValueError from tools is properly captured."""
+        captured_events = self._create_mock_event_capture()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            await client.call_tool("tool_that_raises", {"error_type": "value"})
+            time.sleep(1.0)
+
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call"
+            and e.resource_name == "tool_that_raises"
+        ]
+        assert len(tool_events) > 0, "No tool_that_raises event captured"
+
+        event = tool_events[0]
+        assert event.is_error is True
+        assert event.error is not None
+        # MCP SDK wraps tool exceptions - check the message contains the original error
+        assert "Test value error from tool" in event.error["message"]
+
+    @pytest.mark.asyncio
+    async def test_tool_raises_runtime_error(self):
+        """Test that RuntimeError from tools is properly captured."""
+        captured_events = self._create_mock_event_capture()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            await client.call_tool("tool_that_raises", {"error_type": "runtime"})
+            time.sleep(1.0)
+
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call"
+            and e.resource_name == "tool_that_raises"
+        ]
+        assert len(tool_events) > 0
+
+        event = tool_events[0]
+        assert event.is_error is True
+        assert event.error is not None
+        # MCP SDK wraps tool exceptions - check the message contains the original error
+        assert "Test runtime error from tool" in event.error["message"]
+
+    @pytest.mark.asyncio
+    async def test_tool_raises_custom_error(self):
+        """Test that custom exception types are properly captured."""
+        captured_events = self._create_mock_event_capture()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            await client.call_tool("tool_that_raises", {"error_type": "custom"})
+            time.sleep(1.0)
+
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call"
+            and e.resource_name == "tool_that_raises"
+        ]
+        assert len(tool_events) > 0
+
+        event = tool_events[0]
+        assert event.is_error is True
+        assert event.error is not None
+        # MCP SDK wraps tool exceptions - check the message contains the original error
+        assert "Test custom error from tool" in event.error["message"]
+
+    @pytest.mark.asyncio
+    async def test_tool_raises_captures_stack_frames(self):
+        """Test that stack frames are properly captured with correct structure."""
+        captured_events = self._create_mock_event_capture()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            await client.call_tool("tool_that_raises", {"error_type": "value"})
+            time.sleep(1.0)
+
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call"
+            and e.resource_name == "tool_that_raises"
+        ]
+        assert len(tool_events) > 0
+
+        event = tool_events[0]
+        assert event.error is not None
+
+        # Verify frames are captured
+        frames = event.error.get("frames", [])
+        assert len(frames) > 0, "No stack frames captured"
+
+        # Verify frame structure
+        for frame in frames:
+            assert "filename" in frame
+            assert "abs_path" in frame
+            assert "function" in frame
+            assert "module" in frame
+            assert "lineno" in frame
+            assert "in_app" in frame
+            assert isinstance(frame["lineno"], int)
+            assert isinstance(frame["in_app"], bool)
+
+    @pytest.mark.asyncio
+    async def test_tool_raises_has_in_app_frames(self):
+        """Test that stack frames include in_app detection."""
+        captured_events = self._create_mock_event_capture()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            await client.call_tool("tool_that_raises", {"error_type": "value"})
+            time.sleep(1.0)
+
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call"
+            and e.resource_name == "tool_that_raises"
+        ]
+        assert len(tool_events) > 0
+
+        event = tool_events[0]
+        frames = event.error.get("frames", [])
+        assert len(frames) > 0, "Should have stack frames"
+
+        # All frames should have in_app field
+        for frame in frames:
+            assert "in_app" in frame, "Frame should have in_app field"
+            assert isinstance(frame["in_app"], bool)
+
+        # Verify we have a mix of in_app and not in_app (sdk code is not in_app)
+        # Note: MCP SDK wraps the error, so the original tool function may not appear
+        # but we still verify the in_app detection logic works
+
+    @pytest.mark.asyncio
+    async def test_tool_raises_captures_context_lines(self):
+        """Test that context lines are captured for in_app frames."""
+        captured_events = self._create_mock_event_capture()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            await client.call_tool("tool_that_raises", {"error_type": "value"})
+            time.sleep(1.0)
+
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call"
+            and e.resource_name == "tool_that_raises"
+        ]
+        assert len(tool_events) > 0
+
+        event = tool_events[0]
+        frames = event.error.get("frames", [])
+        in_app_frames = [f for f in frames if f.get("in_app") is True]
+
+        # In-app frames should have context_line
+        frames_with_context = [f for f in in_app_frames if f.get("context_line")]
+        assert len(frames_with_context) > 0, "No context lines for in_app frames"
+
+        # Context line should contain actual code
+        for frame in frames_with_context:
+            context = frame["context_line"]
+            assert len(context) > 0
+            assert context.strip() != ""
+
+    @pytest.mark.asyncio
+    async def test_mcp_protocol_error(self):
+        """Test that MCP protocol errors (McpError) are properly handled."""
+        captured_events = self._create_mock_event_capture()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            await client.call_tool("tool_with_mcp_error", {})
+            time.sleep(1.0)
+
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call"
+            and e.resource_name == "tool_with_mcp_error"
+        ]
+        assert len(tool_events) > 0, "No tool_with_mcp_error event captured"
+
+        event = tool_events[0]
+        assert event.is_error is True
+        assert event.error is not None
+        assert "Invalid parameters" in event.error["message"]
 
 
 if __name__ == "__main__":

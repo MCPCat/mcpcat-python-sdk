@@ -6,8 +6,8 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    # Run weekly to catch new MCP versions
-    - cron: '0 0 * * 0'
+    # Run daily at midnight UTC to catch new MCP versions
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:

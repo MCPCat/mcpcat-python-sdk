@@ -333,27 +333,36 @@ class TestCommunityReportMissing:
                 # Should have exactly 3 tool calls
                 assert len(tool_events) == 3
 
-                # Verify event types and tool names
-                assert tool_events[0].resource_name == "get_more_tools"
-                assert (
-                    tool_events[0].parameters["arguments"]["context"]
-                    == "Need a tool to translate text between languages"
-                )
-                # Verify user_intent for get_more_tools
-                assert tool_events[0].user_intent == "Need a tool to translate text between languages"
+                # Verify event types and tool names (order not guaranteed due to concurrent processing)
+                tool_names = [e.resource_name for e in tool_events]
+                assert tool_names.count("get_more_tools") == 2
+                assert tool_names.count("add_todo") == 1
 
-                assert tool_events[1].resource_name == "add_todo"
-                assert (
-                    tool_events[1].parameters["arguments"]["text"] == "Test todo item"
-                )
+                # Find events by resource name for detailed verification
+                get_more_tools_events = [
+                    e for e in tool_events if e.resource_name == "get_more_tools"
+                ]
+                add_todo_events = [
+                    e for e in tool_events if e.resource_name == "add_todo"
+                ]
 
-                assert tool_events[2].resource_name == "get_more_tools"
+                # Verify get_more_tools events
+                for event in get_more_tools_events:
+                    assert (
+                        event.parameters["arguments"]["context"]
+                        == "Need a tool to translate text between languages"
+                    )
+                    assert (
+                        event.user_intent
+                        == "Need a tool to translate text between languages"
+                    )
+
+                # Verify add_todo event
+                assert len(add_todo_events) == 1
                 assert (
-                    tool_events[2].parameters["arguments"]["context"]
-                    == "Need a tool to translate text between languages"
+                    add_todo_events[0].parameters["arguments"]["text"]
+                    == "Test todo item"
                 )
-                # Verify user_intent for second get_more_tools call
-                assert tool_events[2].user_intent == "Need a tool to translate text between languages"
 
         finally:
             # Clean up: restore original event queue

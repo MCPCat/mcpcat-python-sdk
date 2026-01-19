@@ -105,7 +105,7 @@ jobs:
       run: |
         # Install with both dev and community extras, allow prereleases
         # FastMCP will determine which MCP version it needs
-        uv sync --extra dev --extra community --prerelease allow
+        uv sync --extra dev --extra community --prerelease if-necessary-or-explicit
 
     - name: Show installed versions
       run: |

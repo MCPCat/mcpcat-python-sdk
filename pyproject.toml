@@ -20,7 +20,7 @@ classifiers = [
 dependencies = [
     "mcp>=1.2.0",
     "mcpcat-api==0.1.4",
-    "pydantic>=2.0.0,<2.12",
+    "pydantic>=2.0.0",
     "requests>=2.31.0",
 ]
 
@@ -31,7 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 community = [
-    "fastmcp>=2.7.0,!=2.9.*",
+    "fastmcp==3.0.0b1",
 ]
 dev = [
     "pytest>=7.0.0",

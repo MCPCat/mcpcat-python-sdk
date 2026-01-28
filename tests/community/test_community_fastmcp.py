@@ -25,17 +25,25 @@ class TestCommunityFastMCPBasics:
         """Test creating a community FastMCP server."""
         server = create_community_todo_server()
         assert server.name == "todo-server"
-        assert hasattr(server, "_mcp_server")
+        # v2 has _mcp_server, v3 has _local_provider
+        assert hasattr(server, "_mcp_server") or hasattr(server, "_local_provider")
 
     @pytest.mark.asyncio
     async def test_tool_registration(self):
         """Test that tools are registered correctly."""
         server = create_community_todo_server()
 
-        # Community FastMCP has different internal structure
-        # Tools are accessed through the tool manager
-        tools = await server.get_tools()
-        tool_names = list(tools.keys())
+        # v2: get_tools() returns dict, v3: list_tools() returns list
+        if hasattr(server, "list_tools"):
+            # v3 API
+            tools = await server.list_tools()
+            tool_names = [t.name for t in tools]
+        elif hasattr(server, "get_tools"):
+            # v2 API
+            tools = await server.get_tools()
+            tool_names = list(tools.keys())
+        else:
+            raise AssertionError("Server has no tool listing method")
 
         assert "add_todo" in tool_names
         assert "list_todos" in tool_names
@@ -43,30 +51,30 @@ class TestCommunityFastMCPBasics:
 
     @pytest.mark.asyncio
     async def test_is_community_fastmcp_server(self):
-        """Test that is_community_fastmcp_server correctly identifies community FastMCP."""
+        """Test is_community_fastmcp_server identifies community FastMCP."""
         from mcpcat.modules.compatibility import (
             is_community_fastmcp_server,
-            is_official_fastmcp_server,
             is_compatible_server,
+            is_official_fastmcp_server,
         )
-        
+
         server = create_community_todo_server()
-        
+
         # Should be identified as community FastMCP
         assert is_community_fastmcp_server(server) is True, (
             "Server should be identified as community FastMCP"
         )
-        
+
         # Should NOT be identified as official FastMCP
         assert is_official_fastmcp_server(server) is False, (
             "Server should NOT be identified as official FastMCP"
         )
-        
+
         # Should be compatible with MCPCat
         assert is_compatible_server(server) is True, (
             "Server should be compatible with MCPCat"
         )
-        
+
 
     @pytest.mark.asyncio
     async def test_tool_execution(self):
@@ -130,10 +138,17 @@ class TestCommunityFastMCPWithMCPCat:
             for tool in tools:
                 if tool.name in ["add_todo", "list_todos", "complete_todo"]:
                     # Community FastMCP might handle schemas differently
-                    schema = getattr(tool, "inputSchema", None) or getattr(tool, "input_schema", None)
-                    assert schema is not None, f"Tool {tool.name} has no input schema"
-                    assert "properties" in schema, f"Tool {tool.name} schema has no properties"
-                    
+                    schema = (
+                        getattr(tool, "inputSchema", None)
+                        or getattr(tool, "input_schema", None)
+                    )
+                    assert schema is not None, (
+                        f"Tool {tool.name} has no input schema"
+                    )
+                    assert "properties" in schema, (
+                        f"Tool {tool.name} schema has no properties"
+                    )
+
                     # This assertion will fail, showing that MCPCat's context injection
                     # doesn't work with community FastMCP
                     assert "context" in schema["properties"], (

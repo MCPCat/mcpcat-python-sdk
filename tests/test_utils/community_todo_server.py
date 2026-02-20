@@ -15,7 +15,7 @@ try:
 
     _version = getattr(fastmcp, "__version__", "0.0.0")
     # v3 starts at 3.0.0b1
-    IS_FASTMCP_V3 = _version.startswith("3.") or _version.startswith("3")
+    IS_FASTMCP_V3 = int(_version.split(".")[0]) >= 3
 except ImportError:
     CommunityFastMCP = None  # type: ignore
     HAS_COMMUNITY_FASTMCP = False

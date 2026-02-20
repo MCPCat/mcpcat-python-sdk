@@ -1,19 +1,24 @@
 """Test event capture completeness with community FastMCP."""
 
-import pytest
-from unittest.mock import MagicMock, patch
 import time
-from datetime import datetime, timezone
+from datetime import datetime
+from unittest.mock import MagicMock
+
+import pytest
 
 from mcpcat import MCPCatOptions, track
 from mcpcat.modules.event_queue import EventQueue, set_event_queue
-from mcpcat.modules.internal import get_server_tracking_data, set_server_tracking_data
+from mcpcat.modules.internal import (
+    get_server_tracking_data,
+    set_server_tracking_data,
+)
 from mcpcat.types import UserIdentity
 
 from ..test_utils.community_client import create_community_test_client
 from ..test_utils.community_todo_server import (
     HAS_COMMUNITY_FASTMCP,
     create_community_todo_server,
+    get_lowlevel_server,
 )
 
 # Skip all tests if community FastMCP is not available
@@ -140,7 +145,7 @@ class TestCommunityEventCapture:
                 "add_todo",
                 {
                     "text": "Buy groceries",
-                    "context": "User wants to add a reminder to buy groceries for dinner",
+                    "context": "User wants to add a reminder to buy groceries",
                 },
             )
             time.sleep(1.0)
@@ -151,9 +156,8 @@ class TestCommunityEventCapture:
         event = tool_events[0]
 
         # User intent should be captured from context
-        assert (
-            event.user_intent
-            == "User wants to add a reminder to buy groceries for dinner"
+        assert event.user_intent == (
+            "User wants to add a reminder to buy groceries"
         )
 
     @pytest.mark.asyncio
@@ -180,14 +184,15 @@ class TestCommunityEventCapture:
             time.sleep(0.5)
 
             # Manually identify the user by setting session data
-            data = get_server_tracking_data(server._mcp_server)
+            lowlevel_server = get_lowlevel_server(server)
+            data = get_server_tracking_data(lowlevel_server)
             user_identity = UserIdentity(
                 user_id="user123",
                 user_name="John Doe",
                 user_data={"email": "john@example.com", "role": "admin"},
             )
             data.identified_sessions[data.session_id] = user_identity
-            set_server_tracking_data(server._mcp_server, data)
+            set_server_tracking_data(lowlevel_server, data)
 
             # Second call - should have actor info
             await client.call_tool("add_todo", {"text": "Test 2"})
@@ -275,14 +280,26 @@ class TestCommunityEventCapture:
                 await client.call_tool("add_todo", {"text": f"Todo {i}"})
             time.sleep(1.0)
 
-        # Extract all event IDs
-        event_ids = [e.id for e in captured_events]
+        # Focus on tool call events
+        tool_call_events = [
+            e for e in captured_events
+            if e.event_type == "mcp:tools/call"
+        ]
 
-        # All IDs should be unique
-        assert len(event_ids) == len(set(event_ids)), "Event IDs are not unique"
+        assert len(tool_call_events) >= 5, (
+            f"Expected at least 5 tool call events, got {len(tool_call_events)}"
+        )
+
+        # Extract tool call event IDs
+        tool_call_ids = [e.id for e in tool_call_events]
+
+        # All tool call IDs should be unique
+        assert len(tool_call_ids) == len(set(tool_call_ids)), (
+            f"Tool call event IDs are not unique: {tool_call_ids}"
+        )
 
         # All IDs should have proper format
-        for event_id in event_ids:
+        for event_id in tool_call_ids:
             assert event_id.startswith("evt_")
             assert len(event_id) > 10
 

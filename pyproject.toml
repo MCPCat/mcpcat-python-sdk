@@ -1,6 +1,6 @@
 [project]
 name = "mcpcat"
-version = "0.1.12"
+version = "0.1.13"
 description = "Analytics Tool for MCP Servers - provides insights into MCP tool usage patterns"
 authors = [
     { name = "MCPCat", email = "support@mcpcat.io" },

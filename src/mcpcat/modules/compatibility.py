@@ -8,11 +8,13 @@ from mcp import ServerResult
 SUPPORTED_MCP_VERSIONS = ">=1.2.0"
 SUPPORTED_OFFICIAL_FASTMCP_VERSIONS = ">=1.2.0"
 SUPPORTED_COMMUNITY_FASTMCP_VERSIONS = ">=2.7.0"
+SUPPORTED_COMMUNITY_FASTMCP_V3_VERSIONS = ">=3.0.0"
 
 # Version compatibility message for errors
 COMPATIBILITY_ERROR_MESSAGE = (
     f"Server must be a supported version of a FastMCP instance "
-    f"(official: {SUPPORTED_OFFICIAL_FASTMCP_VERSIONS}, community: {SUPPORTED_COMMUNITY_FASTMCP_VERSIONS}) "
+    f"(official: {SUPPORTED_OFFICIAL_FASTMCP_VERSIONS}, "
+    f"community: {SUPPORTED_COMMUNITY_FASTMCP_VERSIONS}) "
     f"or MCP Low-level Server instance ({SUPPORTED_MCP_VERSIONS})"
 )
 
@@ -28,24 +30,63 @@ class MCPServerProtocol(Protocol):
         """Call a tool by name."""
         ...
 
-def is_community_fastmcp_server(server: Any) -> bool:
-    """Check if the server is a community FastMCP instance.
+def is_community_fastmcp_v3(server: Any) -> bool:
+    """Check if the server is a Community FastMCP v3 instance.
 
-    Community FastMCP comes from the 'fastmcp' package.
-    Supports FastMCP subclasses like FastMCPOpenAPI, FastMCPProxy, etc.
+    Community FastMCP v3 uses the Provider architecture with _local_provider
+    instead of the ToolManager architecture with _tool_manager.
+    It also has the middleware system with add_middleware method.
     """
     # Check by class name and module
     class_name = server.__class__.__name__
     module_name = server.__class__.__module__
 
-    # Community FastMCP has class name containing 'FastMCP' and module starts with 'fastmcp'
-    # This supports FastMCPOpenAPI, FastMCPProxy, and other subclasses
+    # Community FastMCP v3 has:
+    # - Class name containing 'FastMCP'
+    # - Module starts with 'fastmcp'
+    # - Has _local_provider (Provider architecture)
+    # - Has add_middleware method (middleware system)
+    # - Does NOT have _tool_manager (v2 attribute)
+    return (
+        "FastMCP" in class_name and
+        module_name.startswith("fastmcp") and
+        hasattr(server, "_local_provider") and
+        hasattr(server, "add_middleware") and
+        hasattr(server, "middleware") and
+        not hasattr(server, "_tool_manager")
+    )
+
+
+def is_community_fastmcp_v2(server: Any) -> bool:
+    """Check if the server is a Community FastMCP v2 instance.
+
+    Community FastMCP v2 uses the ToolManager architecture with _tool_manager.
+    """
+    # Check by class name and module
+    class_name = server.__class__.__name__
+    module_name = server.__class__.__module__
+
+    # Community FastMCP v2 has:
+    # - Class name containing 'FastMCP'
+    # - Module starts with 'fastmcp'
+    # - Has _mcp_server
+    # - Has _tool_manager (ToolManager architecture)
     return (
         "FastMCP" in class_name and
         module_name.startswith("fastmcp") and
         hasattr(server, "_mcp_server") and
         hasattr(server, "_tool_manager")
     )
+
+
+def is_community_fastmcp_server(server: Any) -> bool:
+    """Check if the server is a community FastMCP instance (any version).
+
+    Community FastMCP comes from the 'fastmcp' package.
+    Supports FastMCP subclasses like FastMCPOpenAPI, FastMCPProxy, etc.
+    This function returns True for both v2 and v3.
+    """
+    return is_community_fastmcp_v2(server) or is_community_fastmcp_v3(server)
 
 def is_official_fastmcp_server(server: Any) -> bool:
     """Check if the server is an official FastMCP instance.
@@ -57,8 +98,8 @@ def is_official_fastmcp_server(server: Any) -> bool:
     class_name = server.__class__.__name__
     module_name = server.__class__.__module__
 
-    # Official FastMCP has class name containing 'FastMCP' and module 'mcp.server.fastmcp'
-    # This supports FastMCPOpenAPI, FastMCPProxy, and other subclasses
+    # Official FastMCP has class name containing 'FastMCP' and module
+    # 'mcp.server.fastmcp'. Supports FastMCPOpenAPI, FastMCPProxy, etc.
     return (
         "FastMCP" in class_name and
         module_name.startswith("mcp.server.fastmcp") and
@@ -96,14 +137,15 @@ def has_required_fastmcp_attributes(server: Any) -> bool:
     if not hasattr(server, "_mcp_server"):
         return False
 
-    # Check if _mcp_server has _get_cached_tool_definition method (for community FastMCP patching)
+    # Check if _mcp_server has _get_cached_tool_definition method
+    # (for community FastMCP patching)
     if not hasattr(server._mcp_server, "_get_cached_tool_definition"):
         return False
 
     return True
 
 
-def has_neccessary_attributes(server: Any) -> bool:
+def has_necessary_attributes(server: Any) -> bool:
     """Check if the server has necessary attributes for compatibility."""
     required_methods = ["list_tools", "call_tool"]
 
@@ -146,68 +188,73 @@ def has_neccessary_attributes(server: Any) -> bool:
 
 def is_compatible_server(server: Any) -> bool:
     """Check if the server is compatible with MCPCat."""
-    # If it's either official or community FastMCP, it's compatible
-    if is_official_fastmcp_server(server) or is_community_fastmcp_server(server):
+    # If it's FastMCP v3 (community), it's compatible
+    if is_community_fastmcp_v3(server):
         return True
-    
+
+    # If it's either official or community FastMCP v2, it's compatible
+    if is_official_fastmcp_server(server) or is_community_fastmcp_v2(server):
+        return True
+
     # Otherwise, check for necessary attributes
-    return has_neccessary_attributes(server)
+    return has_necessary_attributes(server)
 
 
 def get_mcp_compatible_error_message(error: Any) -> str:
     """Get error message in a compatible format."""
-    if isinstance(error, Exception):
-        return str(error)
     return str(error)
 
 
 def is_mcp_error_response(response: ServerResult) -> tuple[bool, str]:
     """Check if the response is an MCP error."""
-    try:
-        # ServerResult is a RootModel, so we need to access its root attribute
-        if hasattr(response, "root"):
-            result = response.root
-            # Check if it's a CallToolResult with an error
-            if hasattr(result, "isError") and result.isError:
-                # Extract error message from content
-                if hasattr(result, "content") and result.content:
-                    # content is a list of TextContent/ImageContent/EmbeddedResource
-                    for content_item in result.content:
-                        # Check if it has a text attribute (TextContent)
-                        if hasattr(content_item, "text"):
-                            return True, str(content_item.text)
-                        # Check if it has type and content attributes
-                        elif hasattr(content_item, "type") and hasattr(
-                            content_item, "content"
-                        ):
-                            if content_item.type == "text":
-                                return True, str(content_item.content)
+    # ServerResult is a RootModel, so we need to access its root attribute
+    if not hasattr(response, "root"):
+        return False, ""
 
-                    # If no text content found, stringify the first item
-                    if result.content and len(result.content) > 0:
-                        return True, str(result.content[0])
-                    return True, "Unknown error"
-                return True, "Unknown error"
+    result = response.root
+
+    # Check if it's a CallToolResult with an error
+    if not (hasattr(result, "isError") and result.isError):
         return False, ""
-    except (AttributeError, IndexError):
-        # Handle specific exceptions more precisely
-        return False, ""
-    except Exception as e:
-        # Log unexpected errors but still return a valid response
-        return False, f"Error checking response: {str(e)}"
+
+    # Extract error message from content
+    if not (hasattr(result, "content") and result.content):
+        return True, "Unknown error"
+
+    # content is a list of TextContent/ImageContent/EmbeddedResource
+    for content_item in result.content:
+        # Check if it has a text attribute (TextContent)
+        if hasattr(content_item, "text"):
+            return True, str(content_item.text)
+        # Check if it has type and content attributes
+        if (
+            hasattr(content_item, "type")
+            and hasattr(content_item, "content")
+            and content_item.type == "text"
+        ):
+            return True, str(content_item.content)
+
+    # If no text content found, stringify the first item
+    if result.content:
+        return True, str(result.content[0])
+
+    return True, "Unknown error"
 
 __all__ = [
     # Version constants
     "SUPPORTED_MCP_VERSIONS",
-    "SUPPORTED_OFFICIAL_FASTMCP_VERSIONS", 
+    "SUPPORTED_OFFICIAL_FASTMCP_VERSIONS",
     "SUPPORTED_COMMUNITY_FASTMCP_VERSIONS",
+    "SUPPORTED_COMMUNITY_FASTMCP_V3_VERSIONS",
     "COMPATIBILITY_ERROR_MESSAGE",
     # Functions
     "is_compatible_server",
     "is_official_fastmcp_server",
     "is_community_fastmcp_server",
+    "is_community_fastmcp_v2",
+    "is_community_fastmcp_v3",
     "has_required_fastmcp_attributes",
-    "has_neccessary_attributes",
+    "has_necessary_attributes",
     "get_mcp_compatible_error_message",
     "is_mcp_error_response",
     # Protocols

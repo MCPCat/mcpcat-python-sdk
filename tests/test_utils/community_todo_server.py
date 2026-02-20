@@ -1,16 +1,59 @@
 """Community FastMCP todo server implementation for testing."""
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 try:
     from fastmcp import FastMCP as CommunityFastMCP
+
     HAS_COMMUNITY_FASTMCP = True
+
+    # Detect FastMCP version
+    import fastmcp
+
+    _version = getattr(fastmcp, "__version__", "0.0.0")
+    # v3 starts at 3.0.0
+    IS_FASTMCP_V3 = int(_version.split(".")[0]) >= 3
 except ImportError:
     CommunityFastMCP = None  # type: ignore
     HAS_COMMUNITY_FASTMCP = False
+    IS_FASTMCP_V3 = False
+
+
+def get_lowlevel_server(server: Any) -> Any:
+    """Get the low-level server for tracking data access.
+
+    In v2, tracking data is stored on server._mcp_server.
+    In v3, tracking data is stored on the server itself.
+
+    Args:
+        server: FastMCP server instance
+
+    Returns:
+        The server object where tracking data is stored
+    """
+    if IS_FASTMCP_V3:
+        return server
+    return getattr(server, "_mcp_server", server)
+
+
+async def get_server_tools(server: Any) -> dict[str, Any]:
+    """Get tools from the server in a version-agnostic way.
+
+    Args:
+        server: FastMCP server instance
+
+    Returns:
+        Dict mapping tool names to tool definitions
+    """
+    if IS_FASTMCP_V3:
+        # v3: list_tools() returns a list of Tool objects
+        tools_list = await server.list_tools()
+        return {t.name: t for t in tools_list}
+    # v2: get_tools() returns a dict
+    return await server.get_tools()
 
 
 class Todo:
@@ -70,17 +113,12 @@ def create_community_todo_server() -> "FastMCP":
 
         raise ValueError(f"Todo with ID {id} not found")
 
-    # Store original handlers for testing (community FastMCP doesn't expose them the same way)
-    # but we can access the tools through the server's tool manager
-    # Using setattr to avoid type checking issues with dynamic attributes
-    setattr(
-        server,
-        "_original_handlers",
-        {
-            "add_todo": add_todo,
-            "list_todos": list_todos,
-            "complete_todo": complete_todo,
-        },
-    )
+    # Store original handlers for testing
+    # (community FastMCP doesn't expose them the same way)
+    server._original_handlers = {
+        "add_todo": add_todo,
+        "list_todos": list_todos,
+        "complete_todo": complete_todo,
+    }
 
     return server

@@ -1,4 +1,4 @@
-"""Test that .track() can be called at any point in server lifecycle with community FastMCP."""
+"""Test .track() timing flexibility with community FastMCP."""
 
 import pytest
 
@@ -9,7 +9,10 @@ from mcpcat.modules.internal import (
 )
 
 from ..test_utils.community_client import create_community_test_client
-from ..test_utils.community_todo_server import HAS_COMMUNITY_FASTMCP
+from ..test_utils.community_todo_server import (
+    HAS_COMMUNITY_FASTMCP,
+    get_lowlevel_server,
+)
 
 # Skip all tests if community FastMCP is not available
 pytestmark = pytest.mark.skipif(
@@ -44,7 +47,7 @@ class TestCommunityTrackingTiming:
         track(server, "test-project", options)
 
         # Verify tracking is initialized even with no tools
-        data = get_server_tracking_data(server._mcp_server)
+        data = get_server_tracking_data(get_lowlevel_server(server))
         assert data is not None
         assert data.tracker_initialized
         assert len(data.tool_registry) == 0  # No tools yet
@@ -67,7 +70,7 @@ class TestCommunityTrackingTiming:
             assert "Second: 20" in str(result2), f"Expected 'Second: 20', got {result2}"
 
         # Verify tools are tracked
-        data = get_server_tracking_data(server._mcp_server)
+        data = get_server_tracking_data(get_lowlevel_server(server))
         assert "first_tool" in data.tool_registry
         assert "second_tool" in data.tool_registry
         assert data.tool_registry["first_tool"].tracked
@@ -96,19 +99,21 @@ class TestCommunityTrackingTiming:
         options = MCPCatOptions(enable_report_missing=False)
         track(server, "test-project", options)
 
-        # Verify initial tools are tracked
-        data = get_server_tracking_data(server._mcp_server)
-        assert len(data.tool_registry) == 2
-        assert "existing_tool1" in data.tool_registry
-        assert "existing_tool2" in data.tool_registry
-
-        # Test initial tools work
+        # Test initial tools work (registered when list_tools or call_tool invoked)
         async with create_community_test_client(server) as client:
+            # First list tools to trigger registration
+            await client.list_tools()
+
+            # Verify initial tools are now tracked
+            data = get_server_tracking_data(get_lowlevel_server(server))
+            assert len(data.tool_registry) == 2
+            assert "existing_tool1" in data.tool_registry
+            assert "existing_tool2" in data.tool_registry
             result = await client.call_tool("existing_tool1", {"x": 5})
-            assert "Existing1: 5" in str(result), f"Expected 'Existing1: 5', got {result}"
+            assert "Existing1: 5" in str(result)
 
             result = await client.call_tool("existing_tool2", {"x": 5})
-            assert "Existing2: 6" in str(result), f"Expected 'Existing2: 6', got {result}"
+            assert "Existing2: 6" in str(result)
 
         # Add more tools after tracking
         @server.tool
@@ -136,7 +141,7 @@ class TestCommunityTrackingTiming:
             assert "New2: 6" in str(result), f"Expected 'New2: 6', got {result}"
 
         # Verify all tools are tracked
-        data = get_server_tracking_data(server._mcp_server)
+        data = get_server_tracking_data(get_lowlevel_server(server))
         assert len(data.tool_registry) == 4
         for tool_name in ["existing_tool1", "existing_tool2", "new_tool1", "new_tool2"]:
             assert tool_name in data.tool_registry
@@ -188,7 +193,7 @@ class TestCommunityTrackingTiming:
             assert "D: 10" in str(result), f"Expected 'D: 10', got {result}"
 
         # Verify all tools are tracked
-        data = get_server_tracking_data(server._mcp_server)
+        data = get_server_tracking_data(get_lowlevel_server(server))
         assert len(data.tool_registry) == 4
         for tool_name in ["tool_a", "tool_b", "tool_c", "async_tool_d"]:
             assert tool_name in data.tool_registry
@@ -213,7 +218,7 @@ class TestCommunityTrackingTiming:
         track(server, "test-project", options)
 
         # Verify tracking is initialized
-        data = get_server_tracking_data(server._mcp_server)
+        data = get_server_tracking_data(get_lowlevel_server(server))
         assert data is not None
         assert data.tracker_initialized
 
@@ -296,11 +301,13 @@ class TestCommunityTrackingTiming:
             result = await client.call_tool("tool2", {"x": 10})
             assert "Tool2: 20" in str(result)
 
-            result = await client.call_tool("tool3", {"x": 10, "context": "Testing tool3"})
+            result = await client.call_tool(
+                "tool3", {"x": 10, "context": "Testing tool3"}
+            )
             assert "Tool3: 15" in str(result)
 
         # Verify all tools are tracked
-        data = get_server_tracking_data(server._mcp_server)
+        data = get_server_tracking_data(get_lowlevel_server(server))
         assert "tool1" in data.tool_registry
         assert "tool2" in data.tool_registry
         assert "tool3" in data.tool_registry
@@ -364,7 +371,7 @@ class TestCommunityTrackingTiming:
             assert "Unfortunately" in str(result)
 
         # Verify all tools are tracked
-        data = get_server_tracking_data(server._mcp_server)
+        data = get_server_tracking_data(get_lowlevel_server(server))
         for tool_name in ["step1_tool", "step2_tool", "step3_tool", "step4_tool"]:
             assert tool_name in data.tool_registry
             assert data.tool_registry[tool_name].tracked

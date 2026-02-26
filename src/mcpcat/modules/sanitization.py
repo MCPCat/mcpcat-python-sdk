@@ -99,10 +99,9 @@ def _sanitize_response(response: dict[str, Any]) -> dict[str, Any]:
             _sanitize_content_block(block) for block in response["content"]
         ]
 
-    if "structured_content" in response:
-        response["structured_content"] = _scan_for_base64(
-            response["structured_content"]
-        )
+    for key, value in response.items():
+        if key != "content":
+            response[key] = _scan_for_base64(value)
 
     return response
 

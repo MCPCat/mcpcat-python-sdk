@@ -224,6 +224,50 @@ class TestParameterScanning:
         assert result.parameters is None
 
 
+class TestResponseWideBase64Scanning:
+    """Tests 20–22: base64 scanning across all response fields."""
+
+    def test_camel_case_structured_content_scanned(self):
+        """20. structuredContent (camelCase) — large base64 redacted."""
+        big = _large_base64()
+        event = _make_event(
+            response={
+                "content": [{"type": "text", "text": "ok"}],
+                "structuredContent": {"payload": big},
+            },
+        )
+        result = sanitize_event(event)
+        assert result.response["structuredContent"]["payload"] == _BINARY_DATA_REDACTED
+        assert result.response["content"][0]["text"] == "ok"
+
+    def test_non_string_response_fields_pass_through(self):
+        """21. Non-string fields (booleans, numbers) pass through unchanged."""
+        event = _make_event(
+            response={
+                "content": [{"type": "text", "text": "ok"}],
+                "isError": False,
+                "is_error": False,
+                "someCount": 42,
+            },
+        )
+        result = sanitize_event(event)
+        assert result.response["isError"] is False
+        assert result.response["is_error"] is False
+        assert result.response["someCount"] == 42
+
+    def test_arbitrary_response_field_with_large_base64_scanned(self):
+        """22. Arbitrary response field with large base64 — scanned and redacted."""
+        big = _large_base64()
+        event = _make_event(
+            response={
+                "content": [{"type": "text", "text": "ok"}],
+                "customField": {"deep": {"blob": big}},
+            },
+        )
+        result = sanitize_event(event)
+        assert result.response["customField"]["deep"]["blob"] == _BINARY_DATA_REDACTED
+
+
 class TestSanitizationIntegration:
     """Tests 18–19: end-to-end integration."""
 

@@ -22,6 +22,7 @@ from .compatibility import get_mcp_compatible_error_message
 from .internal import get_server_tracking_data
 from .logging import write_to_log
 from .redaction import redact_event
+from .sanitization import sanitize_event
 from .session import get_session_info, set_last_activity
 
 
@@ -112,6 +113,13 @@ class EventQueue:
                 )
                 return  # Skip this event if redaction fails
 
+        try:
+            event = sanitize_event(event)
+        except Exception as error:
+            write_to_log(
+                f"WARNING: Sanitization failed for event {event.id or 'unknown'}, sending unsanitized: {error}"
+            )
+
         if event:
             event.id = event.id or generate_prefixed_ksuid("evt")
 
@@ -143,12 +151,22 @@ class EventQueue:
             )
             write_to_log(f"Event details: {event.model_dump_json()}")
         except Exception as error:
+            if self._shutdown_event.is_set():
+                write_to_log(
+                    f"Dropping event {event.id} retry due to shutdown"
+                )
+                return
             write_to_log(
                 f"Failed to send event {event.id}, retrying... [Error: {get_mcp_compatible_error_message(error)}]"
             )
             if retries < self.max_retries:
                 # Exponential backoff: 1s, 2s, 4s
-                time.sleep(2**retries)
+                # Use shutdown_event.wait so backoff is interruptible
+                if self._shutdown_event.wait(timeout=2**retries):
+                    write_to_log(
+                        f"Dropping event {event.id} retry due to shutdown"
+                    )
+                    return
                 self._send_event(event, retries + 1)
             else:
                 write_to_log(
@@ -184,8 +202,8 @@ class EventQueue:
         # Wait for the specified time
         time.sleep(wait_time)
 
-        # Shutdown executor (this will wait for running tasks to complete)
-        self.executor.shutdown()
+        # Shutdown executor, cancelling any queued (not yet running) tasks
+        self.executor.shutdown(wait=True, cancel_futures=True)
 
         # Log final status
         remaining = self.queue.qsize()

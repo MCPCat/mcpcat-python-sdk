@@ -79,6 +79,16 @@ class TestDepthLimiting:
             inner = inner["nested"]
         assert inner == f"[nested content truncated by MCPcat at depth {MAX_DEPTH}]"
 
+    def test_max_depth_zero_preserves_top_level_mapping(self):
+        value = {
+            "event_type": "mcp:tools/call",
+            "parameters": {"nested": {"x": "y"}},
+        }
+        result = _truncate_value(value, max_depth=0)
+        assert isinstance(result, dict)
+        assert result["event_type"] == "mcp:tools/call"
+        assert result["parameters"] == "[nested content truncated by MCPcat at depth 0]"
+
 
 class TestBreadthLimiting:
     """Dicts/lists with more than MAX_BREADTH items are trimmed."""

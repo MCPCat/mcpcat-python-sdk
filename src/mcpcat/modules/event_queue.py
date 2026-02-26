@@ -113,7 +113,12 @@ class EventQueue:
                 )
                 return  # Skip this event if redaction fails
 
-        event = sanitize_event(event)
+        try:
+            event = sanitize_event(event)
+        except Exception as error:
+            write_to_log(
+                f"WARNING: Sanitization failed for event {event.id or 'unknown'}, sending unsanitized: {error}"
+            )
 
         if event:
             event.id = event.id or generate_prefixed_ksuid("evt")

@@ -23,6 +23,7 @@ from .internal import get_server_tracking_data
 from .logging import write_to_log
 from .redaction import redact_event
 from .sanitization import sanitize_event
+from .truncation import truncate_event
 from .session import get_session_info, set_last_activity
 
 
@@ -118,6 +119,12 @@ class EventQueue:
         except Exception as error:
             write_to_log(
                 f"WARNING: Sanitization failed for event {event.id or 'unknown'}, sending unsanitized: {error}"
+            )
+        try:
+            event = truncate_event(event)
+        except Exception as error:
+            write_to_log(
+                f"WARNING: Truncation failed for event {event.id or 'unknown'}, sending untruncated: {error}"
             )
 
         if event:

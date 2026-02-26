@@ -1,7 +1,12 @@
 """Unit tests for the truncation module."""
 
-from unittest.mock import patch
+import time
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from mcpcat import MCPCatOptions, track
+from mcpcat.modules.event_queue import EventQueue, set_event_queue
 from mcpcat.modules.truncation import (
     _truncate_value,
     truncate_event,
@@ -68,16 +73,18 @@ class TestDepthLimiting:
         assert inner == "leaf"
 
     def test_exceeds_max_depth_replaced_with_marker(self):
-        # Build nested dict MAX_DEPTH + 1 levels deep
+        # Build nested dict MAX_DEPTH + 2 levels deep
         value = "leaf"
-        for _ in range(MAX_DEPTH + 1):
+        for _ in range(MAX_DEPTH + 2):
             value = {"nested": value}
         result = _truncate_value(value)
-        # Walk to depth MAX_DEPTH — should hit marker
+        # Walk to depth MAX_DEPTH — dict at limit is preserved
         inner = result
         for _ in range(MAX_DEPTH):
             inner = inner["nested"]
-        assert inner == f"[nested content truncated by MCPcat at depth {MAX_DEPTH}]"
+        # The dict at the limit is kept, but its nested children are markers
+        assert isinstance(inner, dict)
+        assert inner["nested"] == f"[nested content truncated by MCPcat at depth {MAX_DEPTH}]"
 
     def test_max_depth_zero_preserves_top_level_mapping(self):
         value = {
@@ -252,3 +259,93 @@ class TestPipelineIntegration:
         from mcpcat.modules.event_queue import EventQueue
         source = inspect.getsource(EventQueue._process_event)
         assert "truncate_event" in source
+
+
+class TestTruncationWithTodoServer:
+    """Integration tests: oversized tool calls through the real todo server are truncated."""
+
+    @pytest.fixture(autouse=True)
+    def setup_and_teardown(self):
+        from mcpcat.modules.event_queue import event_queue as original_queue
+        yield
+        set_event_queue(original_queue)
+
+    def _capture_setup(self):
+        mock_api_client = MagicMock()
+        captured_events = []
+
+        def capture_event(publish_event_request):
+            captured_events.append(publish_event_request)
+
+        mock_api_client.publish_event = MagicMock(side_effect=capture_event)
+        test_queue = EventQueue(api_client=mock_api_client)
+        set_event_queue(test_queue)
+        return captured_events
+
+    @pytest.mark.asyncio
+    async def test_oversized_parameter_is_truncated(self):
+        """A tool call with a >100 KB parameter string is truncated in the captured event."""
+        from .test_utils.client import create_test_client
+        from .test_utils.todo_server import create_todo_server
+
+        captured_events = self._capture_setup()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        # Use varied text so the sanitizer doesn't flag it as binary data
+        chunk = "The quick brown fox jumps over the lazy dog. "
+        oversized_text = chunk * (200_000 // len(chunk) + 1)  # ~200 KB
+
+        async with create_test_client(server) as client:
+            await client.call_tool("add_todo", {"text": oversized_text})
+            time.sleep(1.0)
+
+        tool_events = [
+            e for e in captured_events if e.event_type == "mcp:tools/call"
+        ]
+        assert len(tool_events) > 0, "No tool call event captured"
+
+        event = tool_events[0]
+
+        # The parameter string should have been truncated
+        captured_text = event.parameters["arguments"]["text"]
+        assert len(captured_text) < len(oversized_text)
+        assert "truncated by MCPcat" in captured_text
+
+        # Whole event must fit within the size limit
+        event_bytes = len(event.model_dump_json().encode("utf-8"))
+        assert event_bytes <= MAX_EVENT_BYTES
+
+    @pytest.mark.asyncio
+    async def test_oversized_response_is_truncated(self):
+        """A tool that returns a >100 KB response has its event response truncated."""
+        from .test_utils.client import create_test_client
+        from .test_utils.todo_server import create_todo_server
+
+        captured_events = self._capture_setup()
+
+        server = create_todo_server()
+        options = MCPCatOptions(enable_tracing=True)
+        track(server, "test_project", options)
+
+        # Add many todos so list_todos returns a large response
+        async with create_test_client(server) as client:
+            for i in range(500):
+                await client.call_tool("add_todo", {"text": f"Todo item number {i} with padding {'z' * 200}"})
+
+            # list_todos returns all of them in one string
+            await client.call_tool("list_todos")
+            time.sleep(1.0)
+
+        list_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call" and e.resource_name == "list_todos"
+        ]
+        assert len(list_events) > 0, "No list_todos event captured"
+
+        event = list_events[0]
+        event_bytes = len(event.model_dump_json().encode("utf-8"))
+        assert event_bytes <= MAX_EVENT_BYTES

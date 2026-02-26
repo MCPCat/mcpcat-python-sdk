@@ -6,8 +6,6 @@ circular references. Acts as a safety net — most events pass through
 unchanged.
 """
 
-import json
-
 from datetime import date, datetime
 from typing import Any, Optional, TYPE_CHECKING
 
@@ -66,8 +64,7 @@ def _truncate_value(
 
     _seen.add(obj_id)
     try:
-        if _depth >= max_depth:
-            return f"[nested content truncated by MCPcat at depth {max_depth}]"
+        at_depth_limit = _depth >= max_depth
 
         if isinstance(value, dict):
             items = list(value.items())
@@ -79,13 +76,25 @@ def _truncate_value(
                         f"[... {remaining} more items truncated by MCPcat]"
                     )
                     break
-                result[str(k)] = _truncate_value(
-                    v, max_depth=max_depth, max_string_bytes=max_string_bytes,
-                    _depth=_depth + 1, _seen=_seen,
-                )
+                if at_depth_limit:
+                    result[str(k)] = (
+                        f"[nested content truncated by MCPcat at depth {max_depth}]"
+                        if isinstance(v, (dict, list, tuple))
+                        else _truncate_value(
+                            v, max_depth=max_depth, max_string_bytes=max_string_bytes,
+                            _depth=_depth + 1, _seen=_seen,
+                        )
+                    )
+                else:
+                    result[str(k)] = _truncate_value(
+                        v, max_depth=max_depth, max_string_bytes=max_string_bytes,
+                        _depth=_depth + 1, _seen=_seen,
+                    )
             return result
 
         if isinstance(value, (list, tuple)):
+            if at_depth_limit:
+                return f"[nested content truncated by MCPcat at depth {max_depth}]"
             result_list = [
                 _truncate_value(
                     item, max_depth=max_depth, max_string_bytes=max_string_bytes,
@@ -100,6 +109,9 @@ def _truncate_value(
                     f"[... {remaining} more items truncated by MCPcat]"
                 )
             return result_list
+
+        if at_depth_limit:
+            return f"[nested content truncated by MCPcat at depth {max_depth}]"
 
         # Fallback for unknown types — repr and truncate
         return _truncate_string(repr(value), max_bytes=max_string_bytes)
@@ -135,17 +147,20 @@ def truncate_event(event: Optional["UnredactedEvent"]) -> Optional["UnredactedEv
             f"({byte_size} bytes), truncating"
         )
 
-        event_dict = event.model_dump()
+        truncated_dict = event.model_dump()
         depth = MAX_DEPTH
         string_bytes = MAX_STRING_BYTES
 
+        event_cls = type(event)
+
         while depth >= 0:
             truncated_dict = _truncate_value(
-                event_dict, max_depth=depth, max_string_bytes=string_bytes,
+                truncated_dict, max_depth=depth, max_string_bytes=string_bytes,
             )
-            result_bytes = len(json.dumps(truncated_dict, default=str).encode("utf-8"))
+            candidate = event_cls.model_validate(truncated_dict)
+            result_bytes = len(candidate.model_dump_json().encode("utf-8"))
             if result_bytes <= MAX_EVENT_BYTES:
-                break
+                return candidate
             write_to_log(
                 f"Event still {result_bytes} bytes at depth={depth} "
                 f"string_limit={string_bytes}, tightening limits"
@@ -153,7 +168,7 @@ def truncate_event(event: Optional["UnredactedEvent"]) -> Optional["UnredactedEv
             depth -= 1
             string_bytes //= 2
 
-        return type(event).model_validate(truncated_dict)
+        return candidate
 
     except Exception as e:
         write_to_log(f"WARNING: Truncation failed for event {event.id or 'unknown'}: {e}")

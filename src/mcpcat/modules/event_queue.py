@@ -120,7 +120,12 @@ class EventQueue:
             write_to_log(
                 f"WARNING: Sanitization failed for event {event.id or 'unknown'}, sending unsanitized: {error}"
             )
-        event = truncate_event(event)
+        try:
+            event = truncate_event(event)
+        except Exception as error:
+            write_to_log(
+                f"WARNING: Truncation failed for event {event.id or 'unknown'}, sending untruncated: {error}"
+            )
 
         if event:
             event.id = event.id or generate_prefixed_ksuid("evt")

@@ -268,6 +268,7 @@ class TestResponseWideBase64Scanning:
         assert result.response["customField"]["deep"]["blob"] == _BINARY_DATA_REDACTED
 
 
+
 class TestSanitizationIntegration:
     """Tests 18–19: end-to-end integration."""
 

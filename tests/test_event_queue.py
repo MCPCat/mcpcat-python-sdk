@@ -235,8 +235,10 @@ class TestEventQueue:
             eq._process_event(event)
 
             mock_ksuid.assert_called_once()
-            assert event.id == generated_id
-            mock_send.assert_called_once_with(event)
+            # sanitize_event creates a deep copy, so check the sent event
+            sent_event = mock_send.call_args[0][0]
+            assert sent_event.id == generated_id
+            mock_send.assert_called_once()
 
     @patch("mcpcat.modules.event_queue.write_to_log")
     def test_send_event_success(self, mock_log):
@@ -263,8 +265,7 @@ class TestEventQueue:
         assert mock_log.call_count >= 1  # At least one success log
 
     @patch("mcpcat.modules.event_queue.write_to_log")
-    @patch("time.sleep")
-    def test_send_event_with_retries(self, mock_sleep, mock_log):
+    def test_send_event_with_retries(self, mock_log):
         """Test sending event with retries on failure."""
         eq = EventQueue()
         mock_api_client = MagicMock()
@@ -274,6 +275,11 @@ class TestEventQueue:
             None,  # Success on third try
         ]
         eq.api_client = mock_api_client
+
+        # Make shutdown_event.wait return immediately (simulates no shutdown)
+        eq._shutdown_event = MagicMock()
+        eq._shutdown_event.is_set.return_value = False
+        eq._shutdown_event.wait.return_value = False  # Not shutting down
 
         event = Event(
             id="test-id",
@@ -286,19 +292,23 @@ class TestEventQueue:
         eq._send_event(event)
 
         assert mock_api_client.publish_event.call_count == 3
-        assert mock_sleep.call_count == 2
-        # Verify exponential backoff
-        sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
-        assert sleep_calls[0] < sleep_calls[1]  # Exponential backoff
+        assert eq._shutdown_event.wait.call_count == 2
+        # Verify exponential backoff timeouts
+        wait_calls = [call[1]["timeout"] for call in eq._shutdown_event.wait.call_args_list]
+        assert wait_calls[0] < wait_calls[1]  # Exponential backoff
 
     @patch("mcpcat.modules.event_queue.write_to_log")
-    @patch("time.sleep")
-    def test_send_event_max_retries_exceeded(self, mock_sleep, mock_log):
+    def test_send_event_max_retries_exceeded(self, mock_log):
         """Test sending event when max retries exceeded."""
         eq = EventQueue()
         mock_api_client = MagicMock()
         mock_api_client.publish_event.side_effect = Exception("Persistent error")
         eq.api_client = mock_api_client
+
+        # Make shutdown_event.wait return immediately (simulates no shutdown)
+        eq._shutdown_event = MagicMock()
+        eq._shutdown_event.is_set.return_value = False
+        eq._shutdown_event.wait.return_value = False  # Not shutting down
 
         event = Event(
             id="test-id",
@@ -312,9 +322,68 @@ class TestEventQueue:
 
         # Initial attempt + retries
         assert mock_api_client.publish_event.call_count == eq.max_retries + 1
-        assert mock_sleep.call_count == eq.max_retries
+        assert eq._shutdown_event.wait.call_count == eq.max_retries
         # Check that failure was logged
         assert any("retries" in str(call).lower() for call in mock_log.call_args_list)
+
+    @patch("mcpcat.modules.event_queue.write_to_log")
+    def test_send_event_aborts_retry_on_shutdown(self, mock_log):
+        """Test that retry is aborted when shutdown is signaled during backoff wait."""
+        eq = EventQueue()
+        mock_api_client = MagicMock()
+        mock_api_client.publish_event.side_effect = Exception("Network error")
+        eq.api_client = mock_api_client
+
+        # Mock _shutdown_event: not set at exception entry, but wait returns True (shutdown during backoff)
+        eq._shutdown_event = MagicMock()
+        eq._shutdown_event.is_set.return_value = False
+        eq._shutdown_event.wait.return_value = True  # Shutdown signaled during wait
+
+        event = Event(
+            id="test-id",
+            event_type="mcp:tools/call",
+            project_id="project-123",
+            session_id="session-123",
+            timestamp=datetime.now(timezone.utc),
+        )
+
+        eq._send_event(event)
+
+        # Only the initial attempt, no retry after wait returned True
+        assert mock_api_client.publish_event.call_count == 1
+        # wait was called once (for the first retry backoff) then aborted
+        assert eq._shutdown_event.wait.call_count == 1
+        # Log should mention shutdown
+        assert any("shutdown" in str(call).lower() for call in mock_log.call_args_list)
+
+    @patch("mcpcat.modules.event_queue.write_to_log")
+    def test_send_event_early_return_on_shutdown_detected(self, mock_log):
+        """Test that no retry is attempted when shutdown is already set at exception handler entry."""
+        eq = EventQueue()
+        mock_api_client = MagicMock()
+        mock_api_client.publish_event.side_effect = Exception("Network error")
+        eq.api_client = mock_api_client
+
+        # Mock _shutdown_event: is_set returns True immediately at exception handler entry
+        eq._shutdown_event = MagicMock()
+        eq._shutdown_event.is_set.return_value = True
+
+        event = Event(
+            id="test-id",
+            event_type="mcp:tools/call",
+            project_id="project-123",
+            session_id="session-123",
+            timestamp=datetime.now(timezone.utc),
+        )
+
+        eq._send_event(event)
+
+        # Only the initial attempt, early return before any retry logic
+        assert mock_api_client.publish_event.call_count == 1
+        # wait should never be called since is_set() returned True first
+        eq._shutdown_event.wait.assert_not_called()
+        # Log should mention shutdown
+        assert any("shutdown" in str(call).lower() for call in mock_log.call_args_list)
 
     def test_get_stats(self):
         """Test getting queue statistics."""
@@ -673,10 +742,9 @@ def test_shutdown_handler_function(mock_event_queue, mock_signal, mock_exit):
     mock_exit.assert_called_once_with(0)
 
 
-@patch("sys.version_info", (3, 8, 0))
 @patch("time.sleep")
-def test_destroy_python38_compatibility(mock_sleep):
-    """Test destroy method on Python < 3.9."""
+def test_destroy_cancels_pending_futures(mock_sleep):
+    """Test destroy method cancels pending futures."""
     eq = EventQueue()
 
     # Add an event
@@ -693,10 +761,8 @@ def test_destroy_python38_compatibility(mock_sleep):
     mock_executor = MagicMock()
     eq.executor = mock_executor
 
-    # Destroy should use shutdown without timeout parameter
     eq.destroy()
 
     assert eq._shutdown is True
     assert eq._shutdown_event.is_set()
-    # Should be called without timeout parameter on Python 3.8
-    mock_executor.shutdown.assert_called_once_with()
+    mock_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)

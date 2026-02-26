@@ -23,6 +23,7 @@ from .internal import get_server_tracking_data
 from .logging import write_to_log
 from .redaction import redact_event
 from .sanitization import sanitize_event
+from .truncation import truncate_event
 from .session import get_session_info, set_last_activity
 
 
@@ -119,6 +120,7 @@ class EventQueue:
             write_to_log(
                 f"WARNING: Sanitization failed for event {event.id or 'unknown'}, sending unsanitized: {error}"
             )
+        event = truncate_event(event)
 
         if event:
             event.id = event.id or generate_prefixed_ksuid("evt")

@@ -489,3 +489,23 @@ class TestManyKeysRegression:
         assert isinstance(result.parameters, dict)
         assert isinstance(result.response, dict)
         assert isinstance(result.error, dict)
+
+    def test_top_level_fields_not_dropped_under_extreme_key_pressure(self):
+        """Top-level event metadata should survive aggressive truncation."""
+        long_key = "k" * 20_000
+        params = {f"{long_key}{i}": "x" for i in range(20)}
+        event = _make_event(
+            event_type="mcp:tools/call",
+            resource_name="test_tool",
+            session_id="test-session-id",
+            parameters=params,
+        )
+
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+
+        assert result_bytes <= MAX_EVENT_BYTES
+        assert result.event_type == "mcp:tools/call"
+        assert result.resource_name == "test_tool"
+        assert isinstance(result.parameters, dict)
+        assert len(result.parameters) > 0

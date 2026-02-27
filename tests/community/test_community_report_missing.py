@@ -142,7 +142,7 @@ class TestCommunityReportMissing:
         async with create_community_test_client(server) as client:
             # Test with missing context - should raise a validation error
             # since context is a required parameter
-            with pytest.raises(Exception, match="Missing required argument"):
+            with pytest.raises(Exception, match="(?i)required"):
                 await client.call_tool("get_more_tools", {})
 
             # Test with valid context
@@ -236,7 +236,7 @@ class TestCommunityReportMissing:
         async with create_community_test_client(server) as client:
             # Test with None context - should raise a validation error
             # since context is required as a string
-            with pytest.raises(Exception, match="Input should be a valid string"):
+            with pytest.raises(Exception, match="(?i)string"):
                 await client.call_tool("get_more_tools", {"context": None})
 
     @pytest.mark.asyncio

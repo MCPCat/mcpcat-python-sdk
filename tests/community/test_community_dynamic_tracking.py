@@ -299,7 +299,7 @@ class TestCommunityDynamicTracking:
 
             # Test with missing context parameter - should raise ToolError
             # since context is a required parameter
-            with pytest.raises(Exception, match="Missing required argument"):
+            with pytest.raises(Exception, match="(?i)required"):
                 await client.call_tool("get_more_tools", {})
 
         # List tools

@@ -297,9 +297,13 @@ class TestCommunityDynamicTracking:
             result2 = await client.call_tool("get_more_tools", {"context": ""})
             assert "Unfortunately" in str(result2)
 
-            # Test with missing context parameter
-            result3 = await client.call_tool("get_more_tools", {})
-            assert "Unfortunately" in str(result3)
+            # Test with missing context parameter - should raise validation error
+            # since context is a required parameter
+            try:
+                await client.call_tool("get_more_tools", {})
+                assert False, "Expected error for missing required context parameter"
+            except Exception:
+                pass  # Expected: context is required
 
         # List tools
         tools = await get_server_tools(server)

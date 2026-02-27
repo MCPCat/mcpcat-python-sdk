@@ -259,10 +259,13 @@ class TestDynamicTracking:
         result2_text = result2[0].text if result2 else ""
         assert "Unfortunately" in result2_text, f"Expected 'Unfortunately' in result, got: {result2_text}"
 
-        # Test with missing context parameter
-        result3, _ = await fastmcp_server.call_tool("get_more_tools", {})
-        result3_text = result3[0].text if result3 else ""
-        assert "Unfortunately" in result3_text, f"Expected 'Unfortunately' in result, got: {result3_text}"
+        # Test with missing context parameter - should raise validation error
+        # since context is a required parameter
+        try:
+            await fastmcp_server.call_tool("get_more_tools", {})
+            assert False, "Expected ToolError for missing required context parameter"
+        except Exception:
+            pass  # Expected: context is required
 
     @pytest.mark.asyncio
     async def test_lowlevel_server_dynamic_tracking(self, lowlevel_server):

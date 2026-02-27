@@ -15,6 +15,33 @@ from mcpcat.modules.tools import handle_report_missing
 from fastmcp import FastMCP
 
 
+def _ensure_context_parameter(tool: Any, description: str) -> None:
+    """Add or overwrite the 'context' parameter in a tool's schema.
+
+    Ensures the tool has a valid parameters dict with a 'context' property
+    marked as required.
+    """
+    if not hasattr(tool, "parameters") or not tool.parameters:
+        tool.parameters = {"type": "object", "properties": {}, "required": []}
+
+    if "properties" not in tool.parameters:
+        tool.parameters["properties"] = {}
+
+    tool.parameters["properties"]["context"] = {
+        "type": "string",
+        "description": description,
+    }
+
+    if "required" not in tool.parameters:
+        tool.parameters["required"] = []
+
+    if isinstance(tool.parameters["required"], list):
+        if "context" not in tool.parameters["required"]:
+            tool.parameters["required"].append("context")
+    else:
+        tool.parameters["required"] = ["context"]
+
+
 def patch_community_fastmcp_tool_manager(server: Any) -> None:
     """Patch the community FastMCP tool manager to add MCPCat tracking.
 
@@ -39,24 +66,25 @@ def patch_community_fastmcp_tool_manager(server: Any) -> None:
     # Add get_more_tools if enabled
     if data.options.enable_report_missing:
         try:
-            # Create the get_more_tools function that returns the proper format
-            async def get_more_tools(context: str | None = "") -> str:
+            async def get_more_tools(context: str) -> str:
                 """Check for additional tools whenever your task might benefit from specialized capabilities."""
-                # Handle None values
-                if context is None:
-                    context = ""
                 result = await handle_report_missing({"context": context})
-                # Return just the text content for community FastMCP
-                if result.content and len(result.content) > 0:
+                if result.content:
                     return result.content[0].text
                 return "No additional tools available"
 
-            # Register it with the server
             server.tool(
                 get_more_tools,
                 name="get_more_tools",
                 description="Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
             )
+
+            # Force the correct schema - Pydantic's TypeAdapter can mangle
+            # the type on async closures into anyOf: [string, null]
+            from mcpcat.modules.tools import GET_MORE_TOOLS_SCHEMA
+            if hasattr(server._tool_manager, "_tools") and "get_more_tools" in server._tool_manager._tools:
+                server._tool_manager._tools["get_more_tools"].parameters = GET_MORE_TOOLS_SCHEMA
+
             write_to_log("Added get_more_tools tool to community FastMCP server")
         except Exception as e:
             write_to_log(f"Error adding get_more_tools: {e}")
@@ -86,35 +114,10 @@ def patch_existing_tools(server: FastMCP) -> None:
             return
 
         for tool_name, tool in tool_manager._tools.items():
-            # Skip get_more_tools
             if tool_name == "get_more_tools":
                 continue
 
-            # Ensure tool has parameters
-            if not hasattr(tool, "parameters"):
-                tool.parameters = {"type": "object", "properties": {}, "required": []}
-            elif not tool.parameters:
-                tool.parameters = {"type": "object", "properties": {}, "required": []}
-
-            # Ensure properties exists
-            if "properties" not in tool.parameters:
-                tool.parameters["properties"] = {}
-
-            # Always overwrite the context property with MCPCat's version
-            tool.parameters["properties"]["context"] = {
-                "type": "string",
-                "description": data.options.custom_context_description,
-            }
-
-            # Add to required array
-            if "required" not in tool.parameters:
-                tool.parameters["required"] = []
-            if isinstance(tool.parameters["required"], list):
-                if "context" not in tool.parameters["required"]:
-                    tool.parameters["required"].append("context")
-            else:
-                tool.parameters["required"] = ["context"]
-
+            _ensure_context_parameter(tool, data.options.custom_context_description)
             write_to_log(f"Added/updated context parameter for existing tool: {tool_name}")
 
     except Exception as e:
@@ -153,34 +156,9 @@ def patch_add_tool_fn(server: FastMCP) -> None:
 
                 # Add context parameter if it's not get_more_tools
                 if tool_name != "get_more_tools":
-                    # Get tracking data to check if context injection is enabled
                     data = get_server_tracking_data(server._mcp_server)
                     if data and data.options.enable_tool_call_context:
-                        # Ensure tool has parameters
-                        if not hasattr(tool, "parameters"):
-                            tool.parameters = {"type": "object", "properties": {}, "required": []}
-                        elif not tool.parameters:
-                            tool.parameters = {"type": "object", "properties": {}, "required": []}
-
-                        # Ensure properties exists
-                        if "properties" not in tool.parameters:
-                            tool.parameters["properties"] = {}
-
-                        # Always overwrite the context property with MCPCat's version
-                        tool.parameters["properties"]["context"] = {
-                            "type": "string",
-                            "description": data.options.custom_context_description
-                        }
-
-                        # Add to required array
-                        if "required" not in tool.parameters:
-                            tool.parameters["required"] = []
-                        if isinstance(tool.parameters["required"], list):
-                            if "context" not in tool.parameters["required"]:
-                                tool.parameters["required"].append("context")
-                        else:
-                            tool.parameters["required"] = ["context"]
-
+                        _ensure_context_parameter(tool, data.options.custom_context_description)
                         write_to_log(f"Added/updated context parameter for new tool: {tool_name}")
 
                 return result

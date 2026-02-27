@@ -110,12 +110,13 @@ class TestReportMissing:
         track(server, "test_project", options)
 
         async with create_test_client(server) as client:
-            # Test with missing parameters - should still work but with empty strings
+            # Test with missing context - should return a validation error
+            # since context is a required parameter
             result = await client.call_tool("get_more_tools", {})
             assert result.content[0].text
-            assert "Unfortunately" in result.content[0].text
+            assert result.isError is True
 
-            # Test with only one parameter
+            # Test with valid context
             result = await client.call_tool("get_more_tools", {"context": "test_tool"})
             assert result.content[0].text
             assert "Unfortunately" in result.content[0].text
@@ -236,11 +237,11 @@ class TestReportMissing:
         track(server, "test_project", options)
 
         async with create_test_client(server) as client:
-            # Test with None values - they should be treated as empty strings
+            # Test with None context - should return a validation error
+            # since context is required as a string
             result = await client.call_tool("get_more_tools", {"context": None})
-            # Should still return a valid response
             assert result.content[0].text
-            assert "Unfortunately" in result.content[0].text
+            assert result.isError is True
 
     @pytest.mark.asyncio
     async def test_report_missing_publishes_event(self):

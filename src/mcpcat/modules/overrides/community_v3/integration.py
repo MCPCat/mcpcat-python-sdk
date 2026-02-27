@@ -4,9 +4,9 @@ This module provides the function to apply MCPCat tracking to
 FastMCP v3 servers using the middleware system.
 """
 
-from __future__ import annotations
+from typing import Annotated, Any
 
-from typing import Any
+from pydantic import Field
 
 from mcpcat.modules.logging import write_to_log
 from mcpcat.modules.overrides.community_v3.middleware import MCPCatMiddleware
@@ -57,62 +57,38 @@ def _register_get_more_tools_v3(server: Any, mcpcat_data: MCPCatData) -> None:
         server: A Community FastMCP v3 server instance.
         mcpcat_data: MCPCat tracking configuration.
     """
+    from fastmcp.tools.tool import Tool
+
     from mcpcat.modules.tools import handle_report_missing
 
     # Define the get_more_tools function
-    async def get_more_tools(context: str | None = None) -> str:
-        """Check for additional tools when your task might benefit from them.
+    async def get_more_tools(
+        context: Annotated[
+            str,
+            Field(
+                description="A description of your goal and what kind of tool would help accomplish it."
+            ),
+        ],
+    ) -> str:
+        """Check for additional tools when your task might benefit from them."""
+        result = await handle_report_missing({"context": context})
 
-        Args:
-            context: A description of your goal and what kind of tool would help.
-
-        Returns:
-            A response message indicating the result.
-        """
-        # Handle None values
-        context_str = context if context is not None else ""
-
-        result = await handle_report_missing({"context": context_str})
-
-        # Return text content for FastMCP v3
-        # The result.content is a list of TextContent objects
-        if result.content and len(result.content) > 0:
-            content_item = result.content[0]
-            if hasattr(content_item, "text"):
-                return content_item.text
-
+        if result.content and hasattr(result.content[0], "text"):
+            return result.content[0].text
         return "No additional tools available."
 
     try:
-        # Note: We don't check if get_more_tools already exists because
-        # FastMCP v3's list_tools is async and we're in a sync context.
-        # The tool decorator handles duplicates gracefully.
-
-        get_more_tools_desc = (
-            "Check for additional tools whenever your task might benefit from "
-            "specialized capabilities - even if existing tools could work as a "
-            "fallback."
+        tool = Tool.from_function(
+            get_more_tools,
+            name="get_more_tools",
+            description=(
+                "Check for additional tools whenever your task might benefit from "
+                "specialized capabilities - even if existing tools could work as a "
+                "fallback."
+            ),
         )
-
-        # Register the tool using the server's tool decorator or add_tool method
-        if hasattr(server, "tool"):
-            server.tool(
-                name="get_more_tools",
-                description=get_more_tools_desc,
-            )(get_more_tools)
-            write_to_log("Registered get_more_tools using server.tool() decorator")
-        elif hasattr(server, "add_tool"):
-            from fastmcp.tools.tool import Tool
-
-            tool = Tool.from_function(
-                get_more_tools,
-                name="get_more_tools",
-                description=get_more_tools_desc,
-            )
-            server.add_tool(tool)
-            write_to_log("Registered get_more_tools using server.add_tool()")
-        else:
-            write_to_log("Warning: Could not find method to register get_more_tools")
+        server.add_tool(tool)
+        write_to_log("Registered get_more_tools using server.add_tool()")
 
     except Exception as e:
         write_to_log(f"Error registering get_more_tools: {e}")

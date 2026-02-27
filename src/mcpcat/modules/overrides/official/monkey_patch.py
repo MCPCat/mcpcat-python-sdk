@@ -7,7 +7,9 @@ enabling MCPCat to track tools regardless of when they are registered.
 import inspect
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any, List
+from typing import Annotated, Any, List
+
+from pydantic import Field
 
 from mcpcat.modules import event_queue
 from mcpcat.modules.compatibility import is_official_fastmcp_server, is_mcp_error_response
@@ -64,13 +66,17 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
         # Add the get_more_tools tool if enabled
         if mcpcat_data.options.enable_report_missing:
             # Create the get_more_tools function that returns CallToolResult
-            async def get_more_tools(context: str | None = "") -> List[Any]:
+            async def get_more_tools(
+                context: Annotated[
+                    str,
+                    Field(
+                        description="A description of your goal and what kind of tool would help accomplish it."
+                    ),
+                ],
+            ) -> List[Any]:
                 """Check for additional tools whenever your task might benefit from specialized capabilities."""
                 from mcpcat.modules.tools import handle_report_missing
 
-                # Handle None values
-                if context is None:
-                    context = ""
                 result = await handle_report_missing({"context": context})
                 # Return just the content list for FastMCP
                 return result.content
@@ -261,11 +267,11 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                 # Extract user intent (non-critical)
                 user_intent = None
                 try:
-                    if (
-                        current_data
-                        and current_data.options.enable_tool_call_context
-                        and name != "get_more_tools"
-                    ):
+                    should_capture_intent = (
+                        name == "get_more_tools"
+                        or (current_data and current_data.options.enable_tool_call_context)
+                    )
+                    if should_capture_intent:
                         user_intent = arguments.get("context", None)
                 except Exception as e:
                     write_to_log(f"Error extracting user intent: {e}")

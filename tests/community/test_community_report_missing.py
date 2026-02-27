@@ -48,6 +48,36 @@ class TestCommunityReportMissing:
             assert "get_more_tools" in tool_names
 
     @pytest.mark.asyncio
+    async def test_report_missing_tool_schema(self):
+        """Test that get_more_tools has context as a required string, not anyOf."""
+        server = create_community_todo_server()
+        options = MCPCatOptions(enable_report_missing=True)
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            get_more_tools = next(t for t in tools_result if t.name == "get_more_tools")
+            schema = get_more_tools.inputSchema
+
+            # context must be a simple {"type": "string"}, not anyOf/oneOf
+            context_prop = schema["properties"]["context"]
+            assert context_prop["type"] == "string", (
+                f"Expected context type 'string', got: {context_prop}"
+            )
+            assert "anyOf" not in context_prop, (
+                f"context should not use anyOf: {context_prop}"
+            )
+            assert "default" not in context_prop, (
+                f"context should not have a default: {context_prop}"
+            )
+
+            # context must be required
+            assert "context" in schema.get("required", []), (
+                f"context should be required, got required={schema.get('required')}"
+            )
+
+    @pytest.mark.asyncio
     async def test_report_missing_disabled_by_default(self):
         """Verify tool is NOT injected when enable_report_missing=False."""
         server = create_community_todo_server()
@@ -110,12 +140,15 @@ class TestCommunityReportMissing:
         track(server, "test_project", options)
 
         async with create_community_test_client(server) as client:
-            # Test with missing parameters - should still work but with empty strings
-            result = await client.call_tool("get_more_tools", {})
-            result_str = str(result)
-            assert "Unfortunately" in result_str
+            # Test with missing context - should raise a validation error
+            # since context is a required parameter
+            try:
+                await client.call_tool("get_more_tools", {})
+                assert False, "Expected error for missing required context parameter"
+            except Exception:
+                pass  # Expected: context is required
 
-            # Test with only one parameter
+            # Test with valid context
             result = await client.call_tool("get_more_tools", {"context": "test_tool"})
             result_str = str(result)
             assert "Unfortunately" in result_str
@@ -204,11 +237,13 @@ class TestCommunityReportMissing:
         track(server, "test_project", options)
 
         async with create_community_test_client(server) as client:
-            # Test with None values - they should be treated as empty strings
-            result = await client.call_tool("get_more_tools", {"context": None})
-            # Should still return a valid response
-            result_str = str(result)
-            assert "Unfortunately" in result_str
+            # Test with None context - should raise a validation error
+            # since context is required as a string
+            try:
+                await client.call_tool("get_more_tools", {"context": None})
+                assert False, "Expected error for null context parameter"
+            except Exception:
+                pass  # Expected: context must be a string
 
     @pytest.mark.asyncio
     async def test_report_missing_publishes_event(self):

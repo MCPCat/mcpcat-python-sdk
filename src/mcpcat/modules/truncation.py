@@ -7,7 +7,7 @@ unchanged.
 """
 
 from datetime import date, datetime
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mcpcat.types import UnredactedEvent
@@ -18,6 +18,7 @@ MAX_EVENT_BYTES = 102_400   # 100 KB total event size
 MAX_STRING_BYTES = 10_240   # 10 KB per individual string
 MAX_DEPTH = 5               # Max nesting depth for dicts/lists
 MAX_BREADTH = 500           # Max items per dict/list
+MIN_DEPTH = 1               # Never reduce depth below this to avoid type mismatches
 
 
 def _truncate_string(value: str, max_bytes: int = MAX_STRING_BYTES) -> str:
@@ -42,14 +43,12 @@ def _truncate_value(
     *,
     max_depth: int = MAX_DEPTH,
     max_string_bytes: int = MAX_STRING_BYTES,
+    max_breadth: int = MAX_BREADTH,
     _depth: int = 0,
     _seen: set[int] | None = None,
 ) -> Any:
     """Recursively walk a value and apply truncation limits."""
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-
-    if isinstance(value, (datetime, date)):
+    if value is None or isinstance(value, (bool, int, float, datetime, date)):
         return value
 
     if isinstance(value, str):
@@ -70,24 +69,18 @@ def _truncate_value(
             items = list(value.items())
             result = {}
             for i, (k, v) in enumerate(items):
-                if i >= MAX_BREADTH:
-                    remaining = len(items) - MAX_BREADTH
+                if i >= max_breadth:
+                    remaining = len(items) - max_breadth
                     result["__truncated__"] = (
                         f"[... {remaining} more items truncated by MCPcat]"
                     )
                     break
-                if at_depth_limit:
-                    result[str(k)] = (
-                        f"[nested content truncated by MCPcat at depth {max_depth}]"
-                        if isinstance(v, (dict, list, tuple))
-                        else _truncate_value(
-                            v, max_depth=max_depth, max_string_bytes=max_string_bytes,
-                            _depth=_depth + 1, _seen=_seen,
-                        )
-                    )
+                if at_depth_limit and isinstance(v, (dict, list, tuple)):
+                    result[str(k)] = f"[nested content truncated by MCPcat at depth {max_depth}]"
                 else:
                     result[str(k)] = _truncate_value(
                         v, max_depth=max_depth, max_string_bytes=max_string_bytes,
+                        max_breadth=max_breadth,
                         _depth=_depth + 1, _seen=_seen,
                     )
             return result
@@ -98,13 +91,14 @@ def _truncate_value(
             result_list = [
                 _truncate_value(
                     item, max_depth=max_depth, max_string_bytes=max_string_bytes,
+                    max_breadth=max_breadth,
                     _depth=_depth + 1, _seen=_seen,
                 )
                 for i, item in enumerate(value)
-                if i < MAX_BREADTH
+                if i < max_breadth
             ]
-            if len(value) > MAX_BREADTH:
-                remaining = len(value) - MAX_BREADTH
+            if len(value) > max_breadth:
+                remaining = len(value) - max_breadth
                 result_list.append(
                     f"[... {remaining} more items truncated by MCPcat]"
                 )
@@ -119,19 +113,21 @@ def _truncate_value(
         _seen.discard(obj_id)
 
 
-def truncate_event(event: Optional["UnredactedEvent"]) -> Optional["UnredactedEvent"]:
+def truncate_event(event: "UnredactedEvent | None") -> "UnredactedEvent | None":
     """Return a truncated copy of *event* if it exceeds MAX_EVENT_BYTES.
 
     Uses size-targeted normalization strategy: normalize with the
     current limits, check JSON byte size, and if still over the limit tighten
     limits and re-normalize until it fits.
 
-    Each pass reduces depth by 1 and halves the per-string byte limit.
+    Each pass halves the per-string byte limit and (once MIN_DEPTH is reached)
+    reduces breadth. Depth never goes below MIN_DEPTH to avoid replacing
+    dict-typed fields with string markers that fail model validation.
 
     - Checks serialized JSON byte size first (fast path)
     - Never mutates the original event
     - Returns original event unchanged if under limit
-    - Returns original event unchanged if truncation itself fails
+    - Returns last valid truncated candidate if loop exhausts limits
     """
     if event is None:
         return None
@@ -147,15 +143,19 @@ def truncate_event(event: Optional["UnredactedEvent"]) -> Optional["UnredactedEv
             f"({byte_size} bytes), truncating"
         )
 
-        truncated_dict = event.model_dump()
+        event_cls = type(event)
         depth = MAX_DEPTH
         string_bytes = MAX_STRING_BYTES
+        breadth = MAX_BREADTH
+        candidate = None
 
-        event_cls = type(event)
-
-        while depth >= 0:
+        while string_bytes >= 1:
+            # Always start from a fresh dump to avoid compounding artifacts
             truncated_dict = _truncate_value(
-                truncated_dict, max_depth=depth, max_string_bytes=string_bytes,
+                event.model_dump(),
+                max_depth=depth,
+                max_string_bytes=string_bytes,
+                max_breadth=breadth,
             )
             candidate = event_cls.model_validate(truncated_dict)
             result_bytes = len(candidate.model_dump_json().encode("utf-8"))
@@ -163,10 +163,15 @@ def truncate_event(event: Optional["UnredactedEvent"]) -> Optional["UnredactedEv
                 return candidate
             write_to_log(
                 f"Event still {result_bytes} bytes at depth={depth} "
-                f"string_limit={string_bytes}, tightening limits"
+                f"string_limit={string_bytes} breadth={breadth}, tightening limits"
             )
-            depth -= 1
+            # Tighten: reduce depth (down to MIN_DEPTH), halve string limit
+            if depth > MIN_DEPTH:
+                depth -= 1
             string_bytes //= 2
+            # Breadth reduction as fallback once depth is at minimum
+            if depth <= MIN_DEPTH and breadth > 10:
+                breadth //= 2
 
         return candidate
 

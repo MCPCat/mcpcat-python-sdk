@@ -14,6 +14,8 @@ from mcpcat.modules.truncation import (
     MAX_DEPTH,
     MAX_BREADTH,
     MAX_EVENT_BYTES,
+    MIN_DEPTH,
+    TRUNCATABLE_FIELDS,
 )
 from mcpcat.types import UnredactedEvent
 
@@ -234,6 +236,34 @@ class TestSizeGuarantee:
         result_bytes = len(result.model_dump_json().encode("utf-8"))
         assert result_bytes <= MAX_EVENT_BYTES
 
+    def test_1mb_single_string_under_limit(self):
+        """A single 1 MB string is truncated to fit."""
+        big = "x" * 1_048_576
+        event = _make_event(parameters={"data": big})
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+    def test_multiple_1mb_strings_under_limit(self):
+        """Multiple 1 MB strings across fields all fit after truncation."""
+        big = "x" * 1_048_576
+        event = _make_event(
+            user_intent=big,
+            parameters={"a": big, "b": big},
+            response={"out": big},
+        )
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+    def test_extreme_breadth_1000_keys_under_limit(self):
+        """1000 keys with moderate values exercises breadth reduction."""
+        params = {f"key_{i}": "x" * 500 for i in range(1000)}
+        event = _make_event(parameters=params)
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
 
 class TestTruncateEventErrorHandling:
     """Truncation failures return the original event."""
@@ -349,3 +379,181 @@ class TestTruncationWithTodoServer:
         event = list_events[0]
         event_bytes = len(event.model_dump_json().encode("utf-8"))
         assert event_bytes <= MAX_EVENT_BYTES
+
+
+class TestMegabyteStrings:
+    """1 MB strings in various fields are truncated to fit under the limit."""
+
+    ONE_MB = "x" * 1_048_576  # 1 MB
+
+    def test_1mb_user_intent(self):
+        event = _make_event(user_intent=self.ONE_MB)
+        result = truncate_event(event)
+        assert result is not event
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+        assert "truncated by MCPcat" in result.user_intent
+
+    def test_1mb_in_parameters(self):
+        event = _make_event(parameters={"context": self.ONE_MB})
+        result = truncate_event(event)
+        assert result is not event
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+        assert "truncated by MCPcat" in result.parameters["context"]
+
+    def test_1mb_in_response(self):
+        event = _make_event(response={"output": self.ONE_MB})
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+        assert "truncated by MCPcat" in result.response["output"]
+
+    def test_1mb_in_error(self):
+        event = _make_event(error={"message": "fail", "stack": self.ONE_MB})
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+        assert "truncated by MCPcat" in result.error["stack"]
+
+    def test_1mb_in_all_fields_simultaneously(self):
+        event = _make_event(
+            user_intent=self.ONE_MB,
+            parameters={"context": self.ONE_MB},
+            response={"output": self.ONE_MB},
+            error={"message": "fail", "stack": self.ONE_MB},
+        )
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+
+class TestManyKeysRegression:
+    """Regression tests for the depth=0 crash bug.
+
+    Events with many moderate-sized keys used to cause depth to reach 0,
+    which replaced dict-typed fields with string markers and crashed
+    model_validate(). The fix keeps depth >= MIN_DEPTH and uses breadth
+    reduction as a fallback.
+    """
+
+    def test_500_keys_x_50kb_stays_under_limit(self):
+        """500 keys * 50 KB = ~25 MB raw — exercises aggressive truncation."""
+        params = {f"key_{i}": "x" * 50_000 for i in range(500)}
+        event = _make_event(parameters=params)
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+    def test_200_keys_x_1kb_stays_under_limit(self):
+        """200 keys * 1 KB = 200 KB — just over the limit, previously crashed."""
+        params = {f"key_{i}": "x" * 1_000 for i in range(200)}
+        event = _make_event(parameters=params)
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+    def test_200_keys_x_10kb_stays_under_limit(self):
+        """200 keys * 10 KB = 2 MB — needs multiple passes."""
+        params = {f"key_{i}": "x" * 10_000 for i in range(200)}
+        event = _make_event(parameters=params)
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+    def test_dict_fields_remain_dicts_after_truncation(self):
+        """Verify parameters/response/error/identify_data stay as dicts, not strings."""
+        params = {f"key_{i}": "x" * 1_000 for i in range(200)}
+        event = _make_event(
+            parameters=params,
+            response={"output": "x" * 50_000},
+            error={"message": "fail", "stack": "x" * 50_000},
+            identify_data={"bio": "x" * 50_000},
+        )
+        result = truncate_event(event)
+        assert isinstance(result.parameters, dict), "parameters should remain a dict"
+        assert isinstance(result.response, dict), "response should remain a dict"
+        assert isinstance(result.error, dict), "error should remain a dict"
+        assert isinstance(result.identify_data, dict), "identify_data should remain a dict"
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+    def test_many_keys_across_multiple_dict_fields(self):
+        """Many keys spread across parameters + response + error."""
+        params = {f"p_{i}": "x" * 2_000 for i in range(100)}
+        resp = {f"r_{i}": "x" * 2_000 for i in range(100)}
+        err = {f"e_{i}": "x" * 2_000 for i in range(100)}
+        event = _make_event(parameters=params, response=resp, error=err)
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+        assert isinstance(result.parameters, dict)
+        assert isinstance(result.response, dict)
+        assert isinstance(result.error, dict)
+
+    def test_top_level_fields_not_dropped_under_extreme_key_pressure(self):
+        """Top-level event metadata should survive aggressive truncation."""
+        long_key = "k" * 20_000
+        params = {f"{long_key}{i}": "x" for i in range(20)}
+        event = _make_event(
+            event_type="mcp:tools/call",
+            resource_name="test_tool",
+            session_id="test-session-id",
+            parameters=params,
+        )
+
+        result = truncate_event(event)
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+
+        assert result_bytes <= MAX_EVENT_BYTES
+        assert result.event_type == "mcp:tools/call"
+        assert result.resource_name == "test_tool"
+        assert isinstance(result.parameters, dict)
+        assert len(result.parameters) > 0
+
+
+class TestMetadataProtection:
+    """Top-level metadata fields must never be truncated, even under extreme payload pressure."""
+
+    def test_metadata_fields_preserved_when_payload_forces_extreme_truncation(self):
+        """Top-level metadata strings must never be truncated, even with huge payloads."""
+        event = _make_event(
+            event_type="mcp:tools/call",
+            resource_name="my_important_tool",
+            session_id="sess-12345",
+            actor_id="actor-67890",
+            user_intent="short intent",
+            parameters={"data": "x" * 1_048_576},  # 1 MB forces aggressive truncation
+        )
+        result = truncate_event(event)
+
+        # Metadata fields must be EXACTLY preserved
+        assert result.event_type == "mcp:tools/call"
+        assert result.resource_name == "my_important_tool"
+        assert result.session_id == "sess-12345"
+        assert result.actor_id == "actor-67890"
+
+        # user_intent IS truncatable, but "short intent" is small enough to survive
+        assert result.user_intent == "short intent"
+
+        # Payload was truncated
+        assert "truncated by MCPcat" in result.parameters["data"]
+
+        # Still under size limit
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+    def test_large_user_intent_truncated_but_metadata_preserved(self):
+        """Large user_intent is truncated while metadata stays intact."""
+        event = _make_event(
+            event_type="mcp:tools/call",
+            resource_name="my_tool",
+            user_intent="x" * 200_000,
+            parameters={"key": "value"},
+        )
+        result = truncate_event(event)
+        assert result.event_type == "mcp:tools/call"
+        assert result.resource_name == "my_tool"
+        assert "truncated by MCPcat" in result.user_intent
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES

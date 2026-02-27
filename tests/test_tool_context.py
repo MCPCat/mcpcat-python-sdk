@@ -1,5 +1,8 @@
 """Test tool context functionality."""
 
+import time
+from unittest.mock import MagicMock
+
 import pytest
 from mcp.server import Server
 from mcp.server.fastmcp import FastMCP
@@ -7,6 +10,7 @@ from mcp.types import Tool
 
 from mcpcat import MCPCatOptions, track
 from mcpcat.modules.constants import DEFAULT_CONTEXT_DESCRIPTION
+from mcpcat.modules.event_queue import EventQueue, set_event_queue
 
 from .test_utils.client import create_test_client
 from .test_utils.todo_server import create_todo_server
@@ -803,3 +807,135 @@ class TestToolContext:
             # Should succeed
             assert result.content
             assert "Added todo" in result.content[0].text
+
+
+class TestGetMoreToolsContextSchema:
+    """Test that get_more_tools has a proper context parameter schema."""
+
+    @pytest.mark.asyncio
+    async def test_get_more_tools_context_has_string_type(self):
+        """get_more_tools context parameter should have type 'string', not a union type."""
+        server = create_todo_server()
+        options = MCPCatOptions(
+            enable_report_missing=True,
+            enable_tool_call_context=True,
+        )
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            get_more_tools_tool = next(
+                t for t in tools_result.tools if t.name == "get_more_tools"
+            )
+
+            context_schema = get_more_tools_tool.inputSchema["properties"]["context"]
+            # Context should be a simple string type, not a union/anyOf
+            assert "anyOf" not in context_schema, (
+                f"get_more_tools context should not use anyOf (union type), got: {context_schema}"
+            )
+            assert context_schema.get("type") == "string", (
+                f"get_more_tools context should be type 'string', got: {context_schema}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_more_tools_context_has_description(self):
+        """get_more_tools context parameter should have a meaningful description."""
+        server = create_todo_server()
+        options = MCPCatOptions(
+            enable_report_missing=True,
+            enable_tool_call_context=True,
+        )
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            get_more_tools_tool = next(
+                t for t in tools_result.tools if t.name == "get_more_tools"
+            )
+
+            context_schema = get_more_tools_tool.inputSchema["properties"]["context"]
+            assert "description" in context_schema, (
+                "get_more_tools context parameter should have a description"
+            )
+            assert len(context_schema["description"]) > 10, (
+                "get_more_tools context description should be meaningful"
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_more_tools_context_is_required(self):
+        """get_more_tools context parameter should be required."""
+        server = create_todo_server()
+        options = MCPCatOptions(
+            enable_report_missing=True,
+            enable_tool_call_context=True,
+        )
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            tools_result = await client.list_tools()
+
+            get_more_tools_tool = next(
+                t for t in tools_result.tools if t.name == "get_more_tools"
+            )
+
+            required = get_more_tools_tool.inputSchema.get("required", [])
+            assert "context" in required, (
+                "get_more_tools context parameter should be required"
+            )
+
+
+class TestUserIntentCaptureInEvents:
+    """Test that user_intent is captured in events for the official FastMCP monkey patching."""
+
+    @pytest.fixture(autouse=True)
+    def setup_and_teardown(self):
+        """Set up and tear down mock event queue."""
+        from mcpcat.modules.event_queue import event_queue as original_queue
+
+        yield
+        set_event_queue(original_queue)
+
+    @pytest.mark.asyncio
+    async def test_get_more_tools_captures_user_intent_in_event(self):
+        """get_more_tools calls should capture user_intent from context in the event."""
+        mock_api_client = MagicMock()
+        captured_events = []
+
+        def capture_event(publish_event_request):
+            captured_events.append(publish_event_request)
+
+        mock_api_client.publish_event = MagicMock(side_effect=capture_event)
+
+        test_queue = EventQueue(api_client=mock_api_client)
+        set_event_queue(test_queue)
+
+        server = create_todo_server()
+        options = MCPCatOptions(
+            enable_tracing=True,
+            enable_report_missing=True,
+            enable_tool_call_context=True,
+        )
+        track(server, "test_project", options)
+
+        async with create_test_client(server) as client:
+            # Call get_more_tools with context
+            await client.call_tool(
+                "get_more_tools",
+                {"context": "I need a tool to send emails"},
+            )
+            time.sleep(1.0)
+
+        tool_events = [
+            e
+            for e in captured_events
+            if e.event_type == "mcp:tools/call"
+            and e.resource_name == "get_more_tools"
+        ]
+        assert len(tool_events) > 0, "No get_more_tools event captured"
+
+        event = tool_events[0]
+        assert event.user_intent == "I need a tool to send emails", (
+            f"user_intent should be captured from get_more_tools context, got: {event.user_intent}"
+        )

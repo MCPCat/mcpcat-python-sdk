@@ -297,9 +297,10 @@ class TestCommunityDynamicTracking:
             result2 = await client.call_tool("get_more_tools", {"context": ""})
             assert "Unfortunately" in str(result2)
 
-            # Test with missing context parameter
-            result3 = await client.call_tool("get_more_tools", {})
-            assert "Unfortunately" in str(result3)
+            # Test with missing context parameter - should raise ToolError
+            # since context is a required parameter
+            with pytest.raises(Exception, match="(?i)required"):
+                await client.call_tool("get_more_tools", {})
 
         # List tools
         tools = await get_server_tools(server)

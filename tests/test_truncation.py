@@ -15,6 +15,7 @@ from mcpcat.modules.truncation import (
     MAX_BREADTH,
     MAX_EVENT_BYTES,
     MIN_DEPTH,
+    TRUNCATABLE_FIELDS,
 )
 from mcpcat.types import UnredactedEvent
 
@@ -509,3 +510,50 @@ class TestManyKeysRegression:
         assert result.resource_name == "test_tool"
         assert isinstance(result.parameters, dict)
         assert len(result.parameters) > 0
+
+
+class TestMetadataProtection:
+    """Top-level metadata fields must never be truncated, even under extreme payload pressure."""
+
+    def test_metadata_fields_preserved_when_payload_forces_extreme_truncation(self):
+        """Top-level metadata strings must never be truncated, even with huge payloads."""
+        event = _make_event(
+            event_type="mcp:tools/call",
+            resource_name="my_important_tool",
+            session_id="sess-12345",
+            actor_id="actor-67890",
+            user_intent="short intent",
+            parameters={"data": "x" * 1_048_576},  # 1 MB forces aggressive truncation
+        )
+        result = truncate_event(event)
+
+        # Metadata fields must be EXACTLY preserved
+        assert result.event_type == "mcp:tools/call"
+        assert result.resource_name == "my_important_tool"
+        assert result.session_id == "sess-12345"
+        assert result.actor_id == "actor-67890"
+
+        # user_intent IS truncatable, but "short intent" is small enough to survive
+        assert result.user_intent == "short intent"
+
+        # Payload was truncated
+        assert "truncated by MCPcat" in result.parameters["data"]
+
+        # Still under size limit
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES
+
+    def test_large_user_intent_truncated_but_metadata_preserved(self):
+        """Large user_intent is truncated while metadata stays intact."""
+        event = _make_event(
+            event_type="mcp:tools/call",
+            resource_name="my_tool",
+            user_intent="x" * 200_000,
+            parameters={"key": "value"},
+        )
+        result = truncate_event(event)
+        assert result.event_type == "mcp:tools/call"
+        assert result.resource_name == "my_tool"
+        assert "truncated by MCPcat" in result.user_intent
+        result_bytes = len(result.model_dump_json().encode("utf-8"))
+        assert result_bytes <= MAX_EVENT_BYTES

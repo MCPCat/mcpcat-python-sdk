@@ -261,11 +261,8 @@ class TestDynamicTracking:
 
         # Test with missing context parameter - should raise validation error
         # since context is a required parameter
-        try:
+        with pytest.raises(Exception, match="(?i)required"):
             await fastmcp_server.call_tool("get_more_tools", {})
-            assert False, "Expected ToolError for missing required context parameter"
-        except Exception:
-            pass  # Expected: context is required
 
     @pytest.mark.asyncio
     async def test_lowlevel_server_dynamic_tracking(self, lowlevel_server):

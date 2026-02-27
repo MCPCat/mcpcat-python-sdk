@@ -20,6 +20,9 @@ MAX_DEPTH = 5               # Max nesting depth for dicts/lists
 MAX_BREADTH = 500           # Max items per dict/list
 MIN_DEPTH = 1               # Never reduce depth below this to avoid type mismatches
 
+# Only these fields get truncated; all other top-level event fields pass through untouched.
+TRUNCATABLE_FIELDS = {"parameters", "response", "error", "identify_data", "user_intent", "additional_properties"}
+
 
 def _truncate_string(value: str, max_bytes: int = MAX_STRING_BYTES) -> str:
     """Truncate a string if its UTF-8 byte size exceeds *max_bytes*."""
@@ -151,13 +154,19 @@ def truncate_event(event: "UnredactedEvent | None") -> "UnredactedEvent | None":
 
         while string_bytes >= 1:
             # Always start from a fresh dump to avoid compounding artifacts
-            truncated_dict = _truncate_value(
-                event.model_dump(),
-                max_depth=depth,
-                max_string_bytes=string_bytes,
-                max_breadth=breadth,
-            )
-            candidate = event_cls.model_validate(truncated_dict)
+            event_dict = event.model_dump()
+            for field_name in TRUNCATABLE_FIELDS:
+                if field_name in event_dict and event_dict[field_name] is not None:
+                    if isinstance(event_dict[field_name], str):
+                        event_dict[field_name] = _truncate_string(event_dict[field_name], max_bytes=string_bytes)
+                    else:
+                        event_dict[field_name] = _truncate_value(
+                            event_dict[field_name],
+                            max_depth=depth,
+                            max_string_bytes=string_bytes,
+                            max_breadth=breadth,
+                        )
+            candidate = event_cls.model_validate(event_dict)
             result_bytes = len(candidate.model_dump_json().encode("utf-8"))
             if result_bytes <= MAX_EVENT_BYTES:
                 return candidate
@@ -170,7 +179,7 @@ def truncate_event(event: "UnredactedEvent | None") -> "UnredactedEvent | None":
                 depth -= 1
             string_bytes //= 2
             # Breadth reduction as fallback once depth is at minimum
-            if depth <= MIN_DEPTH and breadth > 10:
+            if depth <= MIN_DEPTH and breadth > 1:
                 breadth //= 2
 
         return candidate

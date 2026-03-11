@@ -157,6 +157,7 @@ class MCPCatOptions:
     redact_sensitive_information: RedactionFunction | None = None
     exporters: dict[str, ExporterConfig] | None = None
     debug_mode: bool = False
+    api_base_url: str | None = None
 
 
 

@@ -1,5 +1,6 @@
 """MCPCat - Analytics Tool for MCP Servers."""
 
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -90,6 +91,12 @@ def track(
         options=options,
     )
     set_server_tracking_data(lowlevel_server, data)
+
+    # Resolve API base URL: option > env var > default
+    api_base_url = options.api_base_url or os.environ.get("MCPCAT_API_URL")
+    if api_base_url:
+        from mcpcat.modules.event_queue import event_queue
+        event_queue.configure(api_base_url)
 
     try:
         if not data.tracker_initialized:

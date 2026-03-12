@@ -54,6 +54,12 @@ class EventQueue:
         self.worker_thread = threading.Thread(target=self._worker, daemon=True)
         self.worker_thread.start()
 
+    def configure(self, api_base_url: str) -> None:
+        """Reconfigure the API client with a new base URL."""
+        config = Configuration(host=api_base_url)
+        api_client_instance = ApiClient(configuration=config)
+        self.api_client = EventsApi(api_client=api_client_instance)
+
     def add(self, event: UnredactedEvent) -> None:
         """Add event to queue."""
         if self._shutdown:

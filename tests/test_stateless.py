@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
+import mcpcat
 from mcpcat.modules.internal import (
     get_server_tracking_data,
     set_server_tracking_data,
@@ -114,3 +115,53 @@ class TestStatelessMode:
         # Second call should be skipped (early-return guard)
         identify_session(self.server, MagicMock(), MagicMock())
         assert mock_fn.call_count == 1
+
+    def test_track_stateless_true_sets_flag(self):
+        """track() with stateless=True should set is_stateless on data."""
+        server = create_todo_server()
+        options = MCPCatOptions(stateless=True)
+        mcpcat.track(server, "test_project", options)
+        data = get_server_tracking_data(server)
+        assert data.is_stateless is True
+
+    def test_track_stateless_false_overrides_detection(self):
+        """track() with stateless=False should force stateful even if server looks stateless."""
+        server = create_todo_server()
+        # Mock the server to look stateless
+        server.settings = MagicMock()
+        server.settings.stateless_http = True
+        options = MCPCatOptions(stateless=False)
+        mcpcat.track(server, "test_project", options)
+        data = get_server_tracking_data(server)
+        assert data.is_stateless is False
+
+    def test_track_stateless_none_auto_detects(self):
+        """track() with stateless=None (default) should auto-detect from server."""
+        server = create_todo_server()
+        options = MCPCatOptions()  # stateless=None by default
+        mcpcat.track(server, "test_project", options)
+        data = get_server_tracking_data(server)
+        # create_todo_server() is not stateless, so should be False
+        assert data.is_stateless is False
+
+    @patch("mcpcat.modules.identify.event_queue")
+    def test_stateless_identify_bad_return(self, mock_event_queue):
+        """In stateless mode, identify returning non-UserIdentity should return None."""
+        bad_fn = MagicMock(return_value="not a UserIdentity")
+        self._setup_data(stateless=True, identify=bad_fn)
+
+        result = identify_session(self.server, MagicMock(), MagicMock())
+
+        assert result is None
+        assert bad_fn.call_count == 1
+
+    @patch("mcpcat.modules.identify.event_queue")
+    def test_stateless_identify_exception(self, mock_event_queue):
+        """In stateless mode, identify raising should return None, not propagate."""
+        raising_fn = MagicMock(side_effect=RuntimeError("identify exploded"))
+        self._setup_data(stateless=True, identify=raising_fn)
+
+        result = identify_session(self.server, MagicMock(), MagicMock())
+
+        assert result is None
+        assert raising_fn.call_count == 1

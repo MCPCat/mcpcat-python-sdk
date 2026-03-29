@@ -25,6 +25,17 @@ from .types import (
 )
 
 
+def _detect_stateless(server) -> bool:
+    """Auto-detect stateless mode from FastMCP server settings."""
+    import warnings
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            return server.settings.stateless_http
+    except (AttributeError, RuntimeError):
+        return False
+
+
 def track(
     server: Any, project_id: str | None = None, options: MCPCatOptions | None = None
 ) -> Any:
@@ -89,6 +100,7 @@ def track(
         session_info=session_info,
         identified_sessions={},
         options=options,
+        is_stateless=options.stateless if (options and options.stateless is not None) else _detect_stateless(server),
     )
     set_server_tracking_data(lowlevel_server, data)
 

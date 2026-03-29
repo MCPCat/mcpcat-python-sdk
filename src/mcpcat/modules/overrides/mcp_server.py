@@ -41,13 +41,21 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         """Intercept initialize requests to add MCPCat data to the request context."""
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
-        identify_session(server, request, request_context)
-        event = UnredactedEvent(
-            session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump() if request.params else {},
-            event_type=EventType.MCP_INITIALIZE.value,
-        )
+        identity = identify_session(server, request, request_context)
+
+        event_kwargs = {
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+            "parameters": request.params.model_dump() if request.params else {},
+            "event_type": EventType.MCP_INITIALIZE.value,
+        }
+        # Stateless: attach identity directly to each event
+        if session_id is None and identity:
+            event_kwargs["identify_actor_given_id"] = identity.user_id
+            event_kwargs["identify_actor_name"] = identity.user_name
+            event_kwargs["identify_data"] = identity.user_data
+
+        event = UnredactedEvent(**event_kwargs)
 
         # Call the original handler
         result = await original_initialize_handler(request)
@@ -64,15 +72,23 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
         get_client_info_from_request_context(server, request_context)
-        identify_session(server, request, request_context)
-        event = UnredactedEvent(
-            session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump()
+        identity = identify_session(server, request, request_context)
+
+        event_kwargs = {
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+            "parameters": request.params.model_dump()
             if request and request.params
             else {},
-            event_type=EventType.MCP_TOOLS_LIST.value,
-        )
+            "event_type": EventType.MCP_TOOLS_LIST.value,
+        }
+        # Stateless: attach identity directly to each event
+        if session_id is None and identity:
+            event_kwargs["identify_actor_given_id"] = identity.user_id
+            event_kwargs["identify_actor_name"] = identity.user_name
+            event_kwargs["identify_data"] = identity.user_data
+
+        event = UnredactedEvent(**event_kwargs)
 
         # Call the original handler to get the tools
         original_result = await original_list_tools_handler(request)
@@ -142,18 +158,25 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
         get_client_info_from_request_context(server, request_context)
-        identify_session(server, request, request_context)
+        identity = identify_session(server, request, request_context)
 
         write_to_log(
             f"Intercepted call to tool '{tool_name}' with arguments: {arguments} and request context: {request_context}"
         )
-        event = UnredactedEvent(
-            session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump() if request.params else {},
-            event_type=EventType.MCP_TOOLS_CALL.value,
-            resource_name=tool_name,
-        )
+        event_kwargs = {
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+            "parameters": request.params.model_dump() if request.params else {},
+            "event_type": EventType.MCP_TOOLS_CALL.value,
+            "resource_name": tool_name,
+        }
+        # Stateless: attach identity directly to each event
+        if session_id is None and identity:
+            event_kwargs["identify_actor_given_id"] = identity.user_id
+            event_kwargs["identify_actor_name"] = identity.user_name
+            event_kwargs["identify_data"] = identity.user_data
+
+        event = UnredactedEvent(**event_kwargs)
 
         # Extract user intent from context (but don't pop yet - we need it for the event)
         if data.options.enable_tool_call_context and tool_name != "get_more_tools":
@@ -220,13 +243,21 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
         """Intercept initialize requests to add MCPCat data to the request context."""
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
-        identify_session(server, request, request_context)
-        event = UnredactedEvent(
-            session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump() if request.params else {},
-            event_type=EventType.MCP_INITIALIZE.value,
-        )
+        identity = identify_session(server, request, request_context)
+
+        event_kwargs = {
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+            "parameters": request.params.model_dump() if request.params else {},
+            "event_type": EventType.MCP_INITIALIZE.value,
+        }
+        # Stateless: attach identity directly to each event
+        if session_id is None and identity:
+            event_kwargs["identify_actor_given_id"] = identity.user_id
+            event_kwargs["identify_actor_name"] = identity.user_name
+            event_kwargs["identify_data"] = identity.user_data
+
+        event = UnredactedEvent(**event_kwargs)
 
         # Call the original handler
         result = await original_initialize_handler(request)
@@ -241,15 +272,23 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
         get_client_info_from_request_context(server, request_context)
-        identify_session(server, request, request_context)
-        event = UnredactedEvent(
-            session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump()
+        identity = identify_session(server, request, request_context)
+
+        event_kwargs = {
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+            "parameters": request.params.model_dump()
             if request and request.params
             else {},
-            event_type=EventType.MCP_TOOLS_LIST.value,
-        )
+            "event_type": EventType.MCP_TOOLS_LIST.value,
+        }
+        # Stateless: attach identity directly to each event
+        if session_id is None and identity:
+            event_kwargs["identify_actor_given_id"] = identity.user_id
+            event_kwargs["identify_actor_name"] = identity.user_name
+            event_kwargs["identify_data"] = identity.user_data
+
+        event = UnredactedEvent(**event_kwargs)
 
         # Call the original handler - tool modifications are handled by monkey-patch
         result = await original_list_tools_handler(request)

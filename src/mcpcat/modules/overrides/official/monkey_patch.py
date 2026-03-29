@@ -259,8 +259,9 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                         },
                     )()
 
-                    identify_session(server._mcp_server, mock_request, request_context)
+                    identity = identify_session(server._mcp_server, mock_request, request_context)
                 except Exception as e:
+                    identity = None
                     write_to_log(f"Non-critical error in session handling: {e}")
                     # Continue without session identification
 
@@ -287,14 +288,21 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
 
                 # Create tracking event (non-critical)
                 try:
-                    event = UnredactedEvent(
-                        session_id=session_id,
-                        timestamp=datetime.now(timezone.utc),
-                        parameters={"name": name, "arguments": arguments},
-                        event_type=EventType.MCP_TOOLS_CALL.value,
-                        resource_name=name,
-                        user_intent=user_intent,
-                    )
+                    event_kwargs = {
+                        "session_id": session_id,
+                        "timestamp": datetime.now(timezone.utc),
+                        "parameters": {"name": name, "arguments": arguments},
+                        "event_type": EventType.MCP_TOOLS_CALL.value,
+                        "resource_name": name,
+                        "user_intent": user_intent,
+                    }
+                    # Stateless: attach identity directly to each event
+                    if session_id is None and identity:
+                        event_kwargs["identify_actor_given_id"] = identity.user_id
+                        event_kwargs["identify_actor_name"] = identity.user_name
+                        event_kwargs["identify_data"] = identity.user_data
+
+                    event = UnredactedEvent(**event_kwargs)
                 except Exception as e:
                     write_to_log(f"Error creating event: {e}")
                     event = None

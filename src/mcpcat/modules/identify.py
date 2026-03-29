@@ -1,14 +1,12 @@
 from datetime import datetime, timezone
-from typing import Optional
 
 from mcpcat.modules import event_queue
-from mcpcat.modules.event_queue import publish_event
 from mcpcat.modules.internal import get_server_tracking_data, set_server_tracking_data
 from mcpcat.modules.logging import write_to_log
 from mcpcat.types import EventType, UnredactedEvent, UserIdentity
 
 
-def identify_session(server, request: any, context: any) -> None:
+def identify_session(server, request: any, context: any) -> UserIdentity | None:
     """
     Identify the user based on the request and context.
 
@@ -25,7 +23,21 @@ def identify_session(server, request: any, context: any) -> None:
     if not data or not data.options or not data.options.identify:
         return
 
-    # Handle None context (e.g., in stateless HTTP mode outside handlers)
+    # Stateless mode: run identify on every request, return identity directly
+    if data.is_stateless:
+        try:
+            identify_result = data.options.identify(request, context)
+            if not identify_result or not isinstance(identify_result, UserIdentity):
+                write_to_log(
+                    f"User identification function did not return a valid UserIdentity instance. Received: {identify_result}"
+                )
+                return
+            return identify_result
+        except Exception as e:
+            write_to_log(f"Error occurred during user identification: {e}")
+            return
+
+    # Stateful mode: existing behavior unchanged
     if context is None:
         write_to_log("Context is None, skipping user identification")
         return

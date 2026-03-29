@@ -46,8 +46,10 @@ class Event(PublishEventRequest):
 
 # Error tracking types
 
+
 class StackFrame(TypedDict, total=False):
     """Stack frame information for error tracking."""
+
     filename: str
     abs_path: str
     function: str  # Function name or "<module>"
@@ -59,6 +61,7 @@ class StackFrame(TypedDict, total=False):
 
 class ChainedErrorData(TypedDict, total=False):
     """Chained exception data (from __cause__ or __context__)."""
+
     message: str
     type: NotRequired[str | None]
     stack: NotRequired[str]
@@ -67,8 +70,11 @@ class ChainedErrorData(TypedDict, total=False):
 
 class ErrorData(TypedDict, total=False):
     """Complete error information for an exception."""
+
     message: str
-    type: NotRequired[str | None]  # Exception class name (e.g., "ValueError", "TypeError")
+    type: NotRequired[
+        str | None
+    ]  # Exception class name (e.g., "ValueError", "TypeError")
     stack: NotRequired[str]
     frames: NotRequired[list[StackFrame]]
     chained_errors: NotRequired[list[ChainedErrorData]]
@@ -158,7 +164,7 @@ class MCPCatOptions:
     exporters: dict[str, ExporterConfig] | None = None
     debug_mode: bool = False
     api_base_url: str | None = None
-
+    stateless: bool | None = None
 
 
 @dataclass
@@ -177,3 +183,4 @@ class MCPCatData:
     wrapped_tools: Set[str] = field(default_factory=set)
     tracker_initialized: bool = False
     monkey_patched: bool = False
+    is_stateless: bool = False

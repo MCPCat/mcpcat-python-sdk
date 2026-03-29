@@ -99,8 +99,9 @@ def patch_community_fastmcp(server: Any) -> None:
             # Handle session identification
             try:
                 get_client_info_from_request_context(lowlevel_server, request_context)
-                identify_session(lowlevel_server, request, request_context)
+                identity = identify_session(lowlevel_server, request, request_context)
             except Exception as e:
+                identity = None
                 write_to_log(f"Non-critical error in session handling: {e}")
 
             # Extract user intent from context parameter
@@ -113,14 +114,21 @@ def patch_community_fastmcp(server: Any) -> None:
                 user_intent = arguments.get("context", None)
 
             # Create tracking event
-            event = UnredactedEvent(
-                session_id=session_id,
-                timestamp=datetime.now(timezone.utc),
-                parameters={"name": tool_name, "arguments": arguments},
-                event_type=EventType.MCP_TOOLS_CALL.value,
-                resource_name=tool_name,
-                user_intent=user_intent,
-            )
+            event_kwargs = {
+                "session_id": session_id,
+                "timestamp": datetime.now(timezone.utc),
+                "parameters": {"name": tool_name, "arguments": arguments},
+                "event_type": EventType.MCP_TOOLS_CALL.value,
+                "resource_name": tool_name,
+                "user_intent": user_intent,
+            }
+            # Stateless: attach identity directly to each event
+            if session_id is None and identity:
+                event_kwargs["identify_actor_given_id"] = identity.user_id
+                event_kwargs["identify_actor_name"] = identity.user_name
+                event_kwargs["identify_data"] = identity.user_data
+
+            event = UnredactedEvent(**event_kwargs)
 
             try:
                 # Handle get_more_tools specially - don't intercept for community FastMCP

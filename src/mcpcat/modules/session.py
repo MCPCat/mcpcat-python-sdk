@@ -138,7 +138,7 @@ def get_client_info_from_request_context(
 def get_session_info(server: Server, data: MCPCatData | None = None) -> SessionInfo:
     """Get session information for the current MCP session."""
     actor_info: Optional[UserIdentity] = None
-    if data:
+    if data and not data.is_stateless:
         actor_info = data.identified_sessions.get(data.session_id, None)
 
     session_info = SessionInfo(
@@ -176,11 +176,14 @@ def set_last_activity(server: Server) -> None:
     set_server_tracking_data(server, data)
 
 
-def get_server_session_id(server: Server) -> str:
+def get_server_session_id(server: Server) -> str | None:
     data = get_server_tracking_data(server)
 
     if not data:
         raise Exception("MCPCat data not initialized for this server")
+
+    if data.is_stateless:
+        return None
 
     now = datetime.now(timezone.utc)
     timeout = timedelta(minutes=INACTIVITY_TIMEOUT_IN_MINUTES)

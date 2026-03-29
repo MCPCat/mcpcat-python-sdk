@@ -107,16 +107,24 @@ class MCPCatMiddleware:
         request_context = self._get_request_context(context)
         try:
             get_client_info_from_request_context(self.server, request_context)
-            identify_session(self.server, context.message, request_context)
+            identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
+            identity = None
             write_to_log(f"Non-critical error in session handling: {e}")
 
-        event = UnredactedEvent(
-            session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
-            parameters=params.model_dump() if params else {},
-            event_type=EventType.MCP_INITIALIZE.value,
-        )
+        event_kwargs = {
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+            "parameters": params.model_dump() if params else {},
+            "event_type": EventType.MCP_INITIALIZE.value,
+        }
+        # Stateless: attach identity directly to each event
+        if session_id is None and identity:
+            event_kwargs["identify_actor_given_id"] = identity.user_id
+            event_kwargs["identify_actor_name"] = identity.user_name
+            event_kwargs["identify_data"] = identity.user_data
+
+        event = UnredactedEvent(**event_kwargs)
 
         try:
             result = await call_next(context)
@@ -154,8 +162,9 @@ class MCPCatMiddleware:
         request_context = self._get_request_context(context)
         try:
             get_client_info_from_request_context(self.server, request_context)
-            identify_session(self.server, context.message, request_context)
+            identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
+            identity = None
             write_to_log(f"Non-critical error in session handling: {e}")
 
         register_tool(self.server, tool_name)
@@ -173,14 +182,21 @@ class MCPCatMiddleware:
         elif should_remove_context:
             user_intent = arguments.pop("context", None)
 
-        event = UnredactedEvent(
-            session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
-            parameters={"name": tool_name, "arguments": arguments},
-            event_type=EventType.MCP_TOOLS_CALL.value,
-            resource_name=tool_name,
-            user_intent=user_intent,
-        )
+        event_kwargs = {
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+            "parameters": {"name": tool_name, "arguments": arguments},
+            "event_type": EventType.MCP_TOOLS_CALL.value,
+            "resource_name": tool_name,
+            "user_intent": user_intent,
+        }
+        # Stateless: attach identity directly to each event
+        if session_id is None and identity:
+            event_kwargs["identify_actor_given_id"] = identity.user_id
+            event_kwargs["identify_actor_name"] = identity.user_name
+            event_kwargs["identify_data"] = identity.user_data
+
+        event = UnredactedEvent(**event_kwargs)
 
         # Create modified context without context parameter if needed
         call_context = context
@@ -241,17 +257,26 @@ class MCPCatMiddleware:
         request_context = self._get_request_context(context)
         try:
             get_client_info_from_request_context(self.server, request_context)
-            identify_session(self.server, context.message, request_context)
+            identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
+            identity = None
             write_to_log(f"Non-critical error in session handling: {e}")
 
         params = getattr(context.message, "params", None)
-        event = UnredactedEvent(
-            session_id=session_id,
-            timestamp=datetime.now(timezone.utc),
-            parameters=params.model_dump() if params else {},
-            event_type=EventType.MCP_TOOLS_LIST.value,
-        )
+
+        event_kwargs = {
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+            "parameters": params.model_dump() if params else {},
+            "event_type": EventType.MCP_TOOLS_LIST.value,
+        }
+        # Stateless: attach identity directly to each event
+        if session_id is None and identity:
+            event_kwargs["identify_actor_given_id"] = identity.user_id
+            event_kwargs["identify_actor_name"] = identity.user_name
+            event_kwargs["identify_data"] = identity.user_data
+
+        event = UnredactedEvent(**event_kwargs)
 
         try:
             tools = list(await call_next(context))

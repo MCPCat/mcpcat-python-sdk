@@ -3,7 +3,10 @@
 import os
 import warnings
 from datetime import datetime, timezone
+from importlib.metadata import version
 from typing import Any
+
+__version__ = version("mcpcat")
 
 from mcpcat.modules.overrides.mcp_server import override_lowlevel_mcp_server
 from mcpcat.modules.session import get_session_info, new_session_id

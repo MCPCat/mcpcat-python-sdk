@@ -118,8 +118,7 @@ class MCPCatMiddleware:
             "parameters": params.model_dump() if params else {},
             "event_type": EventType.MCP_INITIALIZE.value,
         }
-        # Stateless: attach identity directly to each event
-        if session_id is None and identity:
+        if identity:
             event_kwargs["identify_actor_given_id"] = identity.user_id
             event_kwargs["identify_actor_name"] = identity.user_name
             event_kwargs["identify_data"] = identity.user_data
@@ -190,8 +189,7 @@ class MCPCatMiddleware:
             "resource_name": tool_name,
             "user_intent": user_intent,
         }
-        # Stateless: attach identity directly to each event
-        if session_id is None and identity:
+        if identity:
             event_kwargs["identify_actor_given_id"] = identity.user_id
             event_kwargs["identify_actor_name"] = identity.user_name
             event_kwargs["identify_data"] = identity.user_data
@@ -270,8 +268,7 @@ class MCPCatMiddleware:
             "parameters": params.model_dump() if params else {},
             "event_type": EventType.MCP_TOOLS_LIST.value,
         }
-        # Stateless: attach identity directly to each event
-        if session_id is None and identity:
+        if identity:
             event_kwargs["identify_actor_given_id"] = identity.user_id
             event_kwargs["identify_actor_name"] = identity.user_name
             event_kwargs["identify_data"] = identity.user_data

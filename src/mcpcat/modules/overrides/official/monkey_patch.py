@@ -296,8 +296,7 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                         "resource_name": name,
                         "user_intent": user_intent,
                     }
-                    # Stateless: attach identity directly to each event
-                    if session_id is None and identity:
+                    if identity:
                         event_kwargs["identify_actor_given_id"] = identity.user_id
                         event_kwargs["identify_actor_name"] = identity.user_name
                         event_kwargs["identify_data"] = identity.user_data

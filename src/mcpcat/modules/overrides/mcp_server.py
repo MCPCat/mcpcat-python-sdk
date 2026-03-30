@@ -49,8 +49,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             "parameters": request.params.model_dump() if request.params else {},
             "event_type": EventType.MCP_INITIALIZE.value,
         }
-        # Stateless: attach identity directly to each event
-        if session_id is None and identity:
+        if identity:
             event_kwargs["identify_actor_given_id"] = identity.user_id
             event_kwargs["identify_actor_name"] = identity.user_name
             event_kwargs["identify_data"] = identity.user_data
@@ -82,8 +81,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             else {},
             "event_type": EventType.MCP_TOOLS_LIST.value,
         }
-        # Stateless: attach identity directly to each event
-        if session_id is None and identity:
+        if identity:
             event_kwargs["identify_actor_given_id"] = identity.user_id
             event_kwargs["identify_actor_name"] = identity.user_name
             event_kwargs["identify_data"] = identity.user_data
@@ -170,8 +168,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             "event_type": EventType.MCP_TOOLS_CALL.value,
             "resource_name": tool_name,
         }
-        # Stateless: attach identity directly to each event
-        if session_id is None and identity:
+        if identity:
             event_kwargs["identify_actor_given_id"] = identity.user_id
             event_kwargs["identify_actor_name"] = identity.user_name
             event_kwargs["identify_data"] = identity.user_data
@@ -243,7 +240,11 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
         """Intercept initialize requests to add MCPCat data to the request context."""
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
-        identity = identify_session(server, request, request_context)
+        try:
+            identity = identify_session(server, request, request_context)
+        except Exception as e:
+            identity = None
+            write_to_log(f"Ran into an error in session identification, no identity could be determined: {e}")
 
         event_kwargs = {
             "session_id": session_id,
@@ -251,8 +252,7 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
             "parameters": request.params.model_dump() if request.params else {},
             "event_type": EventType.MCP_INITIALIZE.value,
         }
-        # Stateless: attach identity directly to each event
-        if session_id is None and identity:
+        if identity:
             event_kwargs["identify_actor_given_id"] = identity.user_id
             event_kwargs["identify_actor_name"] = identity.user_name
             event_kwargs["identify_data"] = identity.user_data
@@ -282,8 +282,7 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
             else {},
             "event_type": EventType.MCP_TOOLS_LIST.value,
         }
-        # Stateless: attach identity directly to each event
-        if session_id is None and identity:
+        if identity:
             event_kwargs["identify_actor_given_id"] = identity.user_id
             event_kwargs["identify_actor_name"] = identity.user_name
             event_kwargs["identify_data"] = identity.user_data

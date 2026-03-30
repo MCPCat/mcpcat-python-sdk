@@ -259,8 +259,9 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                         },
                     )()
 
-                    identify_session(server._mcp_server, mock_request, request_context)
+                    identity = identify_session(server._mcp_server, mock_request, request_context)
                 except Exception as e:
+                    identity = None
                     write_to_log(f"Non-critical error in session handling: {e}")
                     # Continue without session identification
 
@@ -294,6 +295,9 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                         event_type=EventType.MCP_TOOLS_CALL.value,
                         resource_name=name,
                         user_intent=user_intent,
+                        identify_actor_given_id=identity.user_id if identity else None,
+                        identify_actor_name=identity.user_name if identity else None,
+                        identify_data=identity.user_data if identity else None,
                     )
                 except Exception as e:
                     write_to_log(f"Error creating event: {e}")

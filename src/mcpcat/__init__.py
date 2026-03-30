@@ -1,8 +1,12 @@
 """MCPCat - Analytics Tool for MCP Servers."""
 
 import os
+import warnings
 from datetime import datetime, timezone
+from importlib.metadata import version
 from typing import Any
+
+__version__ = version("mcpcat")
 
 from mcpcat.modules.overrides.mcp_server import override_lowlevel_mcp_server
 from mcpcat.modules.session import get_session_info, new_session_id
@@ -23,6 +27,28 @@ from .types import (
     RedactionFunction,
     UserIdentity,
 )
+
+
+def _detect_stateless(server) -> bool:
+    """Auto-detect stateless mode from FastMCP server settings.
+
+    Best-effort: community FastMCP v3 deprecated per-instance .settings
+    in favor of global fastmcp.settings, but the global isn't per-server.
+    The deprecated shim is the only per-instance API available.
+    MCPCatOptions(stateless=True) is the recommended explicit path.
+    """
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            result = server.settings.stateless_http
+            if result:
+                write_to_log(
+                    "Auto-detected stateless HTTP mode from your FastMCP server's .settings. "
+                    "If this is incorrect, please pass stateless=False to MCPCatOptions and file a bug report."
+                )
+            return result
+    except (AttributeError, RuntimeError):
+        return False
 
 
 def track(
@@ -89,6 +115,7 @@ def track(
         session_info=session_info,
         identified_sessions={},
         options=options,
+        is_stateless=options.stateless if options.stateless is not None else _detect_stateless(server),
     )
     set_server_tracking_data(lowlevel_server, data)
 

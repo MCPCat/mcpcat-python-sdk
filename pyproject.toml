@@ -1,6 +1,6 @@
 [project]
 name = "mcpcat"
-version = "0.1.14"
+version = "0.1.15b1"
 description = "Analytics Tool for MCP Servers - provides insights into MCP tool usage patterns"
 authors = [
     { name = "MCPCat", email = "support@mcpcat.io" },
@@ -19,7 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "mcp>=1.2.0",
-    "mcpcat-api==0.1.4",
+    "mcpcat-api==0.1.9",
     "pydantic>=2.0.0,<2.12",
     "requests>=2.31.0",
 ]

@@ -107,8 +107,9 @@ class MCPCatMiddleware:
         request_context = self._get_request_context(context)
         try:
             get_client_info_from_request_context(self.server, request_context)
-            identify_session(self.server, context.message, request_context)
+            identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
+            identity = None
             write_to_log(f"Non-critical error in session handling: {e}")
 
         event = UnredactedEvent(
@@ -116,6 +117,9 @@ class MCPCatMiddleware:
             timestamp=datetime.now(timezone.utc),
             parameters=params.model_dump() if params else {},
             event_type=EventType.MCP_INITIALIZE.value,
+            identify_actor_given_id=identity.user_id if identity else None,
+            identify_actor_name=identity.user_name if identity else None,
+            identify_data=identity.user_data if identity else None,
         )
 
         try:
@@ -154,8 +158,9 @@ class MCPCatMiddleware:
         request_context = self._get_request_context(context)
         try:
             get_client_info_from_request_context(self.server, request_context)
-            identify_session(self.server, context.message, request_context)
+            identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
+            identity = None
             write_to_log(f"Non-critical error in session handling: {e}")
 
         register_tool(self.server, tool_name)
@@ -180,6 +185,9 @@ class MCPCatMiddleware:
             event_type=EventType.MCP_TOOLS_CALL.value,
             resource_name=tool_name,
             user_intent=user_intent,
+            identify_actor_given_id=identity.user_id if identity else None,
+            identify_actor_name=identity.user_name if identity else None,
+            identify_data=identity.user_data if identity else None,
         )
 
         # Create modified context without context parameter if needed
@@ -241,16 +249,21 @@ class MCPCatMiddleware:
         request_context = self._get_request_context(context)
         try:
             get_client_info_from_request_context(self.server, request_context)
-            identify_session(self.server, context.message, request_context)
+            identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
+            identity = None
             write_to_log(f"Non-critical error in session handling: {e}")
 
         params = getattr(context.message, "params", None)
+
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
             parameters=params.model_dump() if params else {},
             event_type=EventType.MCP_TOOLS_LIST.value,
+            identify_actor_given_id=identity.user_id if identity else None,
+            identify_actor_name=identity.user_name if identity else None,
+            identify_data=identity.user_data if identity else None,
         )
 
         try:

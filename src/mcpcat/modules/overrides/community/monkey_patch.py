@@ -99,8 +99,9 @@ def patch_community_fastmcp(server: Any) -> None:
             # Handle session identification
             try:
                 get_client_info_from_request_context(lowlevel_server, request_context)
-                identify_session(lowlevel_server, request, request_context)
+                identity = identify_session(lowlevel_server, request, request_context)
             except Exception as e:
+                identity = None
                 write_to_log(f"Non-critical error in session handling: {e}")
 
             # Extract user intent from context parameter
@@ -120,6 +121,9 @@ def patch_community_fastmcp(server: Any) -> None:
                 event_type=EventType.MCP_TOOLS_CALL.value,
                 resource_name=tool_name,
                 user_intent=user_intent,
+                identify_actor_given_id=identity.user_id if identity else None,
+                identify_actor_name=identity.user_name if identity else None,
+                identify_data=identity.user_data if identity else None,
             )
 
             try:

@@ -41,12 +41,16 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         """Intercept initialize requests to add MCPCat data to the request context."""
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
-        identify_session(server, request, request_context)
+        identity = identify_session(server, request, request_context)
+
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
             parameters=request.params.model_dump() if request.params else {},
             event_type=EventType.MCP_INITIALIZE.value,
+            identify_actor_given_id=identity.user_id if identity else None,
+            identify_actor_name=identity.user_name if identity else None,
+            identify_data=identity.user_data if identity else None,
         )
 
         # Call the original handler
@@ -64,7 +68,8 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
         get_client_info_from_request_context(server, request_context)
-        identify_session(server, request, request_context)
+        identity = identify_session(server, request, request_context)
+
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
@@ -72,6 +77,9 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             if request and request.params
             else {},
             event_type=EventType.MCP_TOOLS_LIST.value,
+            identify_actor_given_id=identity.user_id if identity else None,
+            identify_actor_name=identity.user_name if identity else None,
+            identify_data=identity.user_data if identity else None,
         )
 
         # Call the original handler to get the tools
@@ -142,7 +150,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
         get_client_info_from_request_context(server, request_context)
-        identify_session(server, request, request_context)
+        identity = identify_session(server, request, request_context)
 
         write_to_log(
             f"Intercepted call to tool '{tool_name}' with arguments: {arguments} and request context: {request_context}"
@@ -153,6 +161,9 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             parameters=request.params.model_dump() if request.params else {},
             event_type=EventType.MCP_TOOLS_CALL.value,
             resource_name=tool_name,
+            identify_actor_given_id=identity.user_id if identity else None,
+            identify_actor_name=identity.user_name if identity else None,
+            identify_data=identity.user_data if identity else None,
         )
 
         # Extract user intent from context (but don't pop yet - we need it for the event)
@@ -220,12 +231,20 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
         """Intercept initialize requests to add MCPCat data to the request context."""
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
-        identify_session(server, request, request_context)
+        try:
+            identity = identify_session(server, request, request_context)
+        except Exception as e:
+            identity = None
+            write_to_log(f"Ran into an error in session identification, no identity could be determined: {e}")
+
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
             parameters=request.params.model_dump() if request.params else {},
             event_type=EventType.MCP_INITIALIZE.value,
+            identify_actor_given_id=identity.user_id if identity else None,
+            identify_actor_name=identity.user_name if identity else None,
+            identify_data=identity.user_data if identity else None,
         )
 
         # Call the original handler
@@ -241,7 +260,8 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
         get_client_info_from_request_context(server, request_context)
-        identify_session(server, request, request_context)
+        identity = identify_session(server, request, request_context)
+
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
@@ -249,6 +269,9 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
             if request and request.params
             else {},
             event_type=EventType.MCP_TOOLS_LIST.value,
+            identify_actor_given_id=identity.user_id if identity else None,
+            identify_actor_name=identity.user_name if identity else None,
+            identify_data=identity.user_data if identity else None,
         )
 
         # Call the original handler - tool modifications are handled by monkey-patch

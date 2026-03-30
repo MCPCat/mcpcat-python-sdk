@@ -288,20 +288,17 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
 
                 # Create tracking event (non-critical)
                 try:
-                    event_kwargs = {
-                        "session_id": session_id,
-                        "timestamp": datetime.now(timezone.utc),
-                        "parameters": {"name": name, "arguments": arguments},
-                        "event_type": EventType.MCP_TOOLS_CALL.value,
-                        "resource_name": name,
-                        "user_intent": user_intent,
-                    }
-                    if identity:
-                        event_kwargs["identify_actor_given_id"] = identity.user_id
-                        event_kwargs["identify_actor_name"] = identity.user_name
-                        event_kwargs["identify_data"] = identity.user_data
-
-                    event = UnredactedEvent(**event_kwargs)
+                    event = UnredactedEvent(
+                        session_id=session_id,
+                        timestamp=datetime.now(timezone.utc),
+                        parameters={"name": name, "arguments": arguments},
+                        event_type=EventType.MCP_TOOLS_CALL.value,
+                        resource_name=name,
+                        user_intent=user_intent,
+                        identify_actor_given_id=identity.user_id if identity else None,
+                        identify_actor_name=identity.user_name if identity else None,
+                        identify_data=identity.user_data if identity else None,
+                    )
                 except Exception as e:
                     write_to_log(f"Error creating event: {e}")
                     event = None

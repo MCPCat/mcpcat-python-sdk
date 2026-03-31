@@ -98,9 +98,10 @@ def patch_community_fastmcp(server: Any) -> None:
 
             # Handle session identification
             try:
-                get_client_info_from_request_context(lowlevel_server, request_context)
+                client_name, client_version = get_client_info_from_request_context(lowlevel_server, request_context)
                 identity = identify_session(lowlevel_server, request, request_context)
             except Exception as e:
+                client_name, client_version = None, None
                 identity = None
                 write_to_log(f"Non-critical error in session handling: {e}")
 
@@ -124,6 +125,8 @@ def patch_community_fastmcp(server: Any) -> None:
                 identify_actor_given_id=identity.user_id if identity else None,
                 identify_actor_name=identity.user_name if identity else None,
                 identify_data=identity.user_data if identity else None,
+                client_name=client_name,
+                client_version=client_version,
             )
 
             try:

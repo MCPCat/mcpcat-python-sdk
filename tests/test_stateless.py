@@ -9,7 +9,7 @@ from mcpcat.modules.internal import (
     set_server_tracking_data,
     reset_all_tracking_data,
 )
-from mcpcat.modules.session import get_server_session_id
+from mcpcat.modules.session import get_server_session_id, get_client_info_from_request_context
 from mcpcat.modules.identify import identify_session
 from mcpcat.types import MCPCatData, MCPCatOptions, SessionInfo, UserIdentity
 
@@ -165,3 +165,50 @@ class TestStatelessMode:
 
         assert result is None
         assert raising_fn.call_count == 1
+
+    def _make_request_context(self, user_agent):
+        """Create a mock request context with a User-Agent header."""
+        ctx = MagicMock()
+        ctx.request.headers = {"user-agent": user_agent}
+        # No session attribute (stateless HTTP)
+        ctx.session = None
+        return ctx
+
+    def test_stateless_client_info_per_request(self):
+        """In stateless mode, consecutive requests with different clients return different info."""
+        self._setup_data(stateless=True)
+
+        ctx1 = self._make_request_context("Cursor/2.6.22")
+        ctx2 = self._make_request_context("Claude Desktop/1.0")
+
+        result1 = get_client_info_from_request_context(self.server, ctx1)
+        result2 = get_client_info_from_request_context(self.server, ctx2)
+
+        assert result1 == ("Cursor", "2.6.22")
+        assert result2 == ("Claude Desktop", "1.0")
+
+    def test_stateless_client_info_returns_values(self):
+        """In stateless mode, get_client_info_from_request_context returns a tuple."""
+        self._setup_data(stateless=True)
+
+        ctx = self._make_request_context("Cursor/2.6.22")
+        result = get_client_info_from_request_context(self.server, ctx)
+
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert result[0] == "Cursor"
+        assert result[1] == "2.6.22"
+
+    def test_stateful_client_info_cached_across_requests(self):
+        """In stateful mode, client info is determined by the first request."""
+        self._setup_data(stateless=False)
+
+        ctx1 = self._make_request_context("Cursor/2.6.22")
+        ctx2 = self._make_request_context("Claude Desktop/1.0")
+
+        get_client_info_from_request_context(self.server, ctx1)
+        get_client_info_from_request_context(self.server, ctx2)
+
+        data = get_server_tracking_data(self.server)
+        assert data.session_info.client_name == "Cursor"
+        assert data.session_info.client_version == "2.6.22"

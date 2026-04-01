@@ -43,6 +43,14 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         request_context = safe_request_context(server)
         identity = identify_session(server, request, request_context)
 
+        # Extract clientInfo from InitializeRequest params (MCP protocol provides it here)
+        client_name, client_version = None, None
+        if request.params and hasattr(request.params, 'clientInfo') and request.params.clientInfo:
+            client_name = request.params.clientInfo.name
+            client_version = getattr(request.params.clientInfo, 'version', None)
+        if not client_name:
+            client_name, client_version = get_client_info_from_request_context(server, request_context)
+
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
@@ -51,12 +59,12 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
             identify_data=identity.user_data if identity else None,
+            client_name=client_name,
+            client_version=client_version,
         )
 
         # Call the original handler
         result = await original_initialize_handler(request)
-
-        # TODO: Grab client and server information from the request
 
         # Record the event
         event.response = result.model_dump() if result else None
@@ -67,7 +75,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         """Intercept list_tools requests to add MCPCat tools and modify existing ones."""
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
-        get_client_info_from_request_context(server, request_context)
+        client_name, client_version = get_client_info_from_request_context(server, request_context)
         identity = identify_session(server, request, request_context)
 
         event = UnredactedEvent(
@@ -80,6 +88,8 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
             identify_data=identity.user_data if identity else None,
+            client_name=client_name,
+            client_version=client_version,
         )
 
         # Call the original handler to get the tools
@@ -149,7 +159,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         arguments = request.params.arguments or {}
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
-        get_client_info_from_request_context(server, request_context)
+        client_name, client_version = get_client_info_from_request_context(server, request_context)
         identity = identify_session(server, request, request_context)
 
         write_to_log(
@@ -164,6 +174,8 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
             identify_data=identity.user_data if identity else None,
+            client_name=client_name,
+            client_version=client_version,
         )
 
         # Extract user intent from context (but don't pop yet - we need it for the event)
@@ -237,6 +249,13 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
             identity = None
             write_to_log(f"Ran into an error in session identification, no identity could be determined: {e}")
 
+        client_name, client_version = None, None
+        if request.params and hasattr(request.params, 'clientInfo') and request.params.clientInfo:
+            client_name = request.params.clientInfo.name
+            client_version = getattr(request.params.clientInfo, 'version', None)
+        if not client_name:
+            client_name, client_version = get_client_info_from_request_context(server, request_context)
+
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
@@ -245,6 +264,8 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
             identify_data=identity.user_data if identity else None,
+            client_name=client_name,
+            client_version=client_version,
         )
 
         # Call the original handler
@@ -259,7 +280,7 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
         """Intercept list_tools requests to track the event (tool modifications handled by monkey-patch)."""
         session_id = get_server_session_id(server)
         request_context = safe_request_context(server)
-        get_client_info_from_request_context(server, request_context)
+        client_name, client_version = get_client_info_from_request_context(server, request_context)
         identity = identify_session(server, request, request_context)
 
         event = UnredactedEvent(
@@ -272,6 +293,8 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
             identify_data=identity.user_data if identity else None,
+            client_name=client_name,
+            client_version=client_version,
         )
 
         # Call the original handler - tool modifications are handled by monkey-patch

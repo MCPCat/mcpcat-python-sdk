@@ -93,20 +93,24 @@ class MCPCatMiddleware:
         session_id = self._get_session_id()
         params = context.message.params
 
-        # Extract client info from initialize params
+        # Extract client info from initialize params (MCP protocol provides clientInfo here)
+        client_name, client_version = None, None
         if params and hasattr(params, "clientInfo") and params.clientInfo:
             client_info = params.clientInfo
             if hasattr(client_info, "name") and client_info.name:
-                self.mcpcat_data.session_info.client_name = client_info.name
+                client_name = client_info.name
             if hasattr(client_info, "version") and client_info.version:
-                self.mcpcat_data.session_info.client_version = client_info.version
+                client_version = client_info.version
 
         # Handle session identification
         # Note: Use self.server (FastMCP) not self.server._mcp_server because
         # tracking data is stored with the FastMCP server as the key for v3
         request_context = self._get_request_context(context)
         try:
-            get_client_info_from_request_context(self.server, request_context)
+            if not client_name:
+                client_name, client_version = get_client_info_from_request_context(self.server, request_context)
+            else:
+                get_client_info_from_request_context(self.server, request_context)
             identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
             identity = None
@@ -120,6 +124,8 @@ class MCPCatMiddleware:
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
             identify_data=identity.user_data if identity else None,
+            client_name=client_name,
+            client_version=client_version,
         )
 
         try:
@@ -157,9 +163,10 @@ class MCPCatMiddleware:
         # tracking data is stored with the FastMCP server as the key for v3
         request_context = self._get_request_context(context)
         try:
-            get_client_info_from_request_context(self.server, request_context)
+            client_name, client_version = get_client_info_from_request_context(self.server, request_context)
             identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
+            client_name, client_version = None, None
             identity = None
             write_to_log(f"Non-critical error in session handling: {e}")
 
@@ -188,6 +195,8 @@ class MCPCatMiddleware:
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
             identify_data=identity.user_data if identity else None,
+            client_name=client_name,
+            client_version=client_version,
         )
 
         # Create modified context without context parameter if needed
@@ -248,9 +257,10 @@ class MCPCatMiddleware:
         # tracking data is stored with the FastMCP server as the key for v3
         request_context = self._get_request_context(context)
         try:
-            get_client_info_from_request_context(self.server, request_context)
+            client_name, client_version = get_client_info_from_request_context(self.server, request_context)
             identity = identify_session(self.server, context.message, request_context)
         except Exception as e:
+            client_name, client_version = None, None
             identity = None
             write_to_log(f"Non-critical error in session handling: {e}")
 
@@ -264,6 +274,8 @@ class MCPCatMiddleware:
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
             identify_data=identity.user_data if identity else None,
+            client_name=client_name,
+            client_version=client_version,
         )
 
         try:

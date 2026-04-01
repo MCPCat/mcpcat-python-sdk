@@ -59,8 +59,11 @@ def get_headers_from_request_context(
 
 def get_client_info_from_request_context(
     server: Server, request_context: RequestContext | None
-) -> None:
+) -> tuple[str | None, str | None]:
     """Extract client information from request context or HTTP headers.
+
+    Returns (client_name, client_version). In stateless mode, extracts per-request
+    without caching. In stateful mode, caches on shared session_info.
 
     This function is designed to be resilient and never fail - any error is logged
     but won't affect the server operation.
@@ -68,71 +71,77 @@ def get_client_info_from_request_context(
     # Handle None request_context (e.g., in stateless HTTP mode outside handlers)
     if request_context is None:
         write_to_log("Request context is None, skipping client info extraction")
-        return
+        return (None, None)
 
     try:
         data = get_server_tracking_data(server)
         if not data:
-            return
+            return (None, None)
 
-        # If client name and version are already set, no need to fetch again
-        if data.session_info.client_name and data.session_info.client_version:
-            return
+        client_name: str | None = None
+        client_version: str | None = None
+
+        # In stateful mode, return cached values if already set
+        if not data.is_stateless and data.session_info.client_name and data.session_info.client_version:
+            return (data.session_info.client_name, data.session_info.client_version)
 
         try:
-            # Try to get from session (stateful mode)
+            # Try to get from MCP session (stateful mode)
             if hasattr(request_context, "session") and request_context.session:
                 client_info = request_context.session.client_params.clientInfo
                 if client_info:
-                    data.session_info.client_name = client_info.name
-                    data.session_info.client_version = client_info.version
-                    set_server_tracking_data(server, data)
-                    return
-        except (AttributeError, TypeError) as e:
+                    client_name = client_info.name
+                    client_version = client_info.version
+                    if not data.is_stateless:
+                        data.session_info.client_name = client_name
+                        data.session_info.client_version = client_version
+                        set_server_tracking_data(server, data)
+                    return (client_name, client_version)
+        except (AttributeError, TypeError):
             # This is expected in stateless mode, just continue
             pass
         except Exception as e:
-            # Unexpected error, log but continue
             write_to_log(f"Error extracting client info from session: {e}")
 
         # Fallback: Try to extract from HTTP headers (stateless mode)
         try:
             headers = get_headers_from_request_context(request_context)
             if headers:
-                # Check User-Agent header
+                # Parse User-Agent header (format: "ClientName/Version ...")
                 user_agent = headers.get("user-agent", "")
                 if user_agent:
-                    # Parse User-Agent for client info
-                    # Format could be: "ClientName/Version (additional info)"
                     match = re.match(r"^([^/]+)/([^\s]+)", user_agent)
                     if match:
-                        data.session_info.client_name = match.group(1)
-                        data.session_info.client_version = match.group(2)
+                        client_name = match.group(1)
+                        client_version = match.group(2)
                     else:
-                        # If no neat match, use the whole string as client_name
-                        data.session_info.client_name = user_agent
+                        # No neat match, use the whole string as client_name
+                        client_name = user_agent
 
-                # Also check custom MCP headers if any
-                # Clients might send: X-MCP-Client-Name, X-MCP-Client-Version
+                # Custom MCP headers override User-Agent if present
                 if headers.get("x-mcp-client-name"):
-                    data.session_info.client_name = headers.get("x-mcp-client-name")
+                    client_name = headers.get("x-mcp-client-name")
                 if headers.get("x-mcp-client-version"):
-                    data.session_info.client_version = headers.get(
-                        "x-mcp-client-version"
-                    )
+                    client_version = headers.get("x-mcp-client-version")
 
-                if data.session_info.client_name or data.session_info.client_version:
+                if not data.is_stateless and (client_name or client_version):
+                    data.session_info.client_name = client_name
+                    data.session_info.client_version = client_version
                     set_server_tracking_data(server, data)
+
+                if client_name or client_version:
                     write_to_log(
-                        f"Extracted client info from headers: {data.session_info.client_name} v{data.session_info.client_version}"
+                        f"Extracted client info from headers: {client_name} v{client_version}"
                     )
         except Exception as e:
             write_to_log(f"Error extracting client info from headers: {e}")
             # Continue without client info
+
+        return (client_name, client_version)
     except Exception as e:
         # Catch-all for any unexpected errors - log but never fail
         write_to_log(f"Unexpected error in get_client_info_from_request_context: {e}")
-        # Function continues and returns normally
+        return (None, None)
 
 
 def get_session_info(server: Server, data: MCPCatData | None = None) -> SessionInfo:
@@ -148,10 +157,10 @@ def get_session_info(server: Server, data: MCPCatData | None = None) -> SessionI
         server_name=server.name if hasattr(server, "name") else None,
         server_version=server.version if hasattr(server, "version") else None,
         client_name=data.session_info.client_name
-        if data and data.session_info
+        if data and data.session_info and not data.is_stateless
         else None,
         client_version=data.session_info.client_version
-        if data and data.session_info
+        if data and data.session_info and not data.is_stateless
         else None,
         identify_actor_given_id=actor_info.user_id if actor_info else None,
         identify_actor_name=actor_info.user_name if actor_info else None,

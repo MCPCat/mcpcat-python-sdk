@@ -239,9 +239,9 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                 # Handle session identification (non-critical)
                 try:
                     request_context = safe_request_context(server._mcp_server)
-                    # Only call if request_context is not None
+                    client_name, client_version = (None, None)
                     if request_context is not None:
-                        get_client_info_from_request_context(
+                        client_name, client_version = get_client_info_from_request_context(
                             server._mcp_server, request_context
                         )
 
@@ -261,9 +261,9 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
 
                     identity = identify_session(server._mcp_server, mock_request, request_context)
                 except Exception as e:
+                    client_name, client_version = None, None
                     identity = None
                     write_to_log(f"Non-critical error in session handling: {e}")
-                    # Continue without session identification
 
                 # Extract user intent (non-critical)
                 user_intent = None
@@ -298,6 +298,8 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                         identify_actor_given_id=identity.user_id if identity else None,
                         identify_actor_name=identity.user_name if identity else None,
                         identify_data=identity.user_data if identity else None,
+                        client_name=client_name,
+                        client_version=client_version,
                     )
                 except Exception as e:
                     write_to_log(f"Error creating event: {e}")

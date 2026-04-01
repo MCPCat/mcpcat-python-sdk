@@ -147,8 +147,13 @@ def get_client_info_from_request_context(
 def get_session_info(server: Server, data: MCPCatData | None = None) -> SessionInfo:
     """Get session information for the current MCP session."""
     actor_info: Optional[UserIdentity] = None
+    client_name: Optional[str] = None
+    client_version: Optional[str] = None
+
     if data and not data.is_stateless:
         actor_info = data.identified_sessions.get(data.session_id, None)
+        client_name = data.session_info.client_name
+        client_version = data.session_info.client_version
 
     session_info = SessionInfo(
         ip_address=None,  # grab from django
@@ -156,18 +161,18 @@ def get_session_info(server: Server, data: MCPCatData | None = None) -> SessionI
         mcpcat_version=get_mcpcat_version(),
         server_name=server.name if hasattr(server, "name") else None,
         server_version=server.version if hasattr(server, "version") else None,
-        client_name=data.session_info.client_name
-        if data and data.session_info and not data.is_stateless
-        else None,
-        client_version=data.session_info.client_version
-        if data and data.session_info and not data.is_stateless
-        else None,
         identify_actor_given_id=actor_info.user_id if actor_info else None,
         identify_actor_name=actor_info.user_name if actor_info else None,
         identify_data=actor_info.user_data if actor_info else None,
+        client_name=client_name,
+        client_version=client_version
     )
 
     if not data:
+        return session_info
+
+    # Do not use shared server data for stateless sessions
+    if data.is_stateless:
         return session_info
 
     data.session_info = session_info

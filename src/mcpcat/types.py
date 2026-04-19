@@ -14,6 +14,18 @@ from mcpcat.modules.constants import DEFAULT_CONTEXT_DESCRIPTION
 IdentifyFunction = Callable[[dict[str, Any], Any], Optional["UserIdentity"]]
 # Type alias for redaction function
 RedactionFunction = Callable[[str], str | Awaitable[str]]
+# Type alias for event_tags callback — returns str:str map attached to every auto-captured event.
+# Accepts sync or async callables (mirrors RedactionFunction).
+EventTagsFunction = Callable[
+    [Any, Any],
+    Optional[dict[str, str]] | Awaitable[Optional[dict[str, str]]],
+]
+# Type alias for event_properties callback — returns JSON-serializable map attached to every auto-captured event.
+# Accepts sync or async callables.
+EventPropertiesFunction = Callable[
+    [Any, Any],
+    Optional[dict[str, Any]] | Awaitable[Optional[dict[str, Any]]],
+]
 
 
 @dataclass
@@ -165,6 +177,23 @@ class MCPCatOptions:
     debug_mode: bool = False
     api_base_url: str | None = None
     stateless: bool | None = None
+    # Callback invoked on every auto-captured event (initialize, tools/list,
+    # tools/call) to attach string key-value tags. Tags are intended for
+    # structured metadata you'll filter or group by in the MCPCat dashboard
+    # (e.g. trace IDs, environments, regions). Validated client-side: keys
+    # must be <=32 chars matching [a-zA-Z0-9$_.:\- ], values must be strings
+    # <=200 chars without newlines, max 50 entries per event. Invalid entries
+    # are dropped with a warning logged to ~/mcpcat.log when debug_mode=True.
+    # May be sync or async. Receives the same (request, extra) arguments as
+    # `identify`. If the callback raises or returns None/{}, tags are omitted.
+    event_tags: EventTagsFunction | None = None
+    # Callback invoked on every auto-captured event to attach JSON-serializable
+    # metadata (device info, feature flags, nested context). No validation
+    # beyond standard JSON types — note: the event is serialized via
+    # model_dump_json() in the queue, so values must be JSON-serializable
+    # (stricter than the TypeScript SDK). May be sync or async. If the callback
+    # raises or returns None, properties are omitted.
+    event_properties: EventPropertiesFunction | None = None
 
 
 @dataclass

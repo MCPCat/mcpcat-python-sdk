@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, List
 import requests
 
 from ...types import Event, SentryExporterConfig
+from ...modules.constants import MCPCAT_SOURCE
 from ...modules.logging import write_to_log
 from . import Exporter
 from .trace_context import trace_context
@@ -345,14 +346,15 @@ class SentryExporter(Exporter):
             "timestamp": end_timestamp,
             "start_timestamp": start_timestamp,
             "transaction": transaction_name,
-            "contexts": {
-                "trace": {
+            "contexts": self.build_contexts(
+                event,
+                {
                     "trace_id": trace_id,
                     "span_id": span_id,
                     "op": event.event_type or "mcp.event",
                     "status": "internal_error" if event.is_error else "ok",
-                }
-            },
+                },
+            ),
             "tags": self.build_tags(event),
             "extra": self.build_extra(event),
         }
@@ -367,7 +369,9 @@ class SentryExporter(Exporter):
         Returns:
             Tags dictionary
         """
-        tags: Dict[str, str] = {}
+        tags: Dict[str, str] = {
+            "source": MCPCAT_SOURCE,
+        }
 
         if self.environment:
             tags["environment"] = self.environment
@@ -384,7 +388,21 @@ class SentryExporter(Exporter):
         if event.identify_actor_given_id:
             tags["actor_id"] = event.identify_actor_given_id
 
+        # Namespace customer tags to avoid collisions with Sentry reserved fields
+        if getattr(event, "tags", None):
+            for key, value in event.tags.items():
+                tags[f"mcpcat.{key}"] = value
+
         return tags
+
+    def build_contexts(
+        self, event: Event, trace_ctx: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build Sentry contexts dict, embedding customer properties under `mcpcat`."""
+        contexts: Dict[str, Any] = {"trace": trace_ctx}
+        if getattr(event, "properties", None):
+            contexts["mcpcat"] = event.properties
+        return contexts
 
     def build_extra(self, event: Event) -> Dict[str, Any]:
         """
@@ -481,16 +499,19 @@ class SentryExporter(Exporter):
                 ]
             },
             "contexts": {
-                "trace": {
-                    "trace_id": trace_id,  # Same trace ID as transaction/log for correlation
-                    "span_id": span_id,
-                    "parent_span_id": transaction["contexts"]["trace"]["span_id"]
-                    if transaction
-                    else None,  # Link to transaction span if available
-                    "op": transaction["contexts"]["trace"]["op"]
-                    if transaction
-                    else (event.event_type or "mcp.event"),
-                },
+                **self.build_contexts(
+                    event,
+                    {
+                        "trace_id": trace_id,  # Same trace ID as transaction/log for correlation
+                        "span_id": span_id,
+                        "parent_span_id": transaction["contexts"]["trace"]["span_id"]
+                        if transaction
+                        else None,  # Link to transaction span if available
+                        "op": transaction["contexts"]["trace"]["op"]
+                        if transaction
+                        else (event.event_type or "mcp.event"),
+                    },
+                ),
                 "mcp": {
                     "resource_name": event.resource_name,
                     "session_id": event.session_id,

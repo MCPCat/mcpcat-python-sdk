@@ -1,14 +1,27 @@
 """Datadog exporter for MCPCat telemetry."""
 
 import json
+import re
 from datetime import datetime
 from typing import Dict, List, Any
 import requests
 
 from ...types import Event, DatadogExporterConfig
+from ...modules.constants import MCPCAT_SOURCE
 from ...modules.logging import write_to_log
 from . import Exporter
 from .trace_context import trace_context
+
+
+_DD_TAG_KEY_SANITIZE = re.compile(r"[\s:,]+")
+
+
+def _sanitize_dd_tag_key(key: str) -> str:
+    return _DD_TAG_KEY_SANITIZE.sub("_", key.lower())
+
+
+def _sanitize_dd_tag_value(value: str) -> str:
+    return value.replace(",", "_")
 
 
 class DatadogExporter(Exporter):
@@ -133,6 +146,15 @@ class DatadogExporter(Exporter):
         if event.is_error:
             tags.append("error:true")
 
+        tags.append(f"source:{MCPCAT_SOURCE}")
+
+        # Add customer-defined tags (namespaced to avoid collisions with reserved Datadog tags)
+        if getattr(event, "tags", None):
+            for key, value in event.tags.items():
+                tags.append(
+                    f"mcpcat.{_sanitize_dd_tag_key(key)}:{_sanitize_dd_tag_value(value)}"
+                )
+
         # Get timestamp in milliseconds
         timestamp_ms = (
             int(event.timestamp.timestamp() * 1000)
@@ -143,7 +165,7 @@ class DatadogExporter(Exporter):
         log: Dict[str, Any] = {
             "message": f"{event.event_type or 'unknown'} - {event.resource_name or 'unknown'}",
             "service": self.service,
-            "ddsource": "mcpcat",
+            "ddsource": MCPCAT_SOURCE,
             "ddtags": ",".join(tags),
             "timestamp": timestamp_ms,
             "status": "error" if event.is_error else "info",
@@ -166,6 +188,8 @@ class DatadogExporter(Exporter):
                 "server_version": event.server_version,
                 "is_error": event.is_error,
                 "error": event.error,
+                "tags": getattr(event, "tags", None),
+                "properties": getattr(event, "properties", None),
             },
         }
 

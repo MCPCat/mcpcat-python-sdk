@@ -113,7 +113,6 @@ def track(
         project_id=project_id,
         last_activity=datetime.now(timezone.utc),
         session_info=session_info,
-        identified_sessions={},
         options=options,
         is_stateless=options.stateless if options.stateless is not None else _detect_stateless(server),
     )

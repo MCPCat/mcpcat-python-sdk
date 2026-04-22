@@ -174,47 +174,33 @@ class TestCommunityEventCapture:
         test_queue = EventQueue(api_client=mock_api_client)
         set_event_queue(test_queue)
 
-        server = create_community_todo_server()
-        options = MCPCatOptions(enable_tracing=True)
-        track(server, "test_project", options)
-
-        async with create_community_test_client(server) as client:
-            # First call - no actor info
-            await client.call_tool("add_todo", {"text": "Test 1"})
-            time.sleep(0.5)
-
-            # Manually identify the user by setting session data
-            lowlevel_server = get_lowlevel_server(server)
-            data = get_server_tracking_data(lowlevel_server)
-            user_identity = UserIdentity(
+        def identify_fn(request, context):
+            return UserIdentity(
                 user_id="user123",
                 user_name="John Doe",
                 user_data={"email": "john@example.com", "role": "admin"},
             )
-            data.identified_sessions[data.session_id] = user_identity
-            set_server_tracking_data(lowlevel_server, data)
 
-            # Second call - should have actor info
+        server = create_community_todo_server()
+        options = MCPCatOptions(enable_tracing=True, identify=identify_fn)
+        track(server, "test_project", options)
+
+        async with create_community_test_client(server) as client:
+            await client.call_tool("add_todo", {"text": "Test 1"})
+            time.sleep(0.5)
             await client.call_tool("add_todo", {"text": "Test 2"})
             time.sleep(1.0)
 
         tool_events = [e for e in captured_events if e.event_type == "mcp:tools/call"]
         assert len(tool_events) >= 2
 
-        # First event should not have actor info
-        first_event = tool_events[0]
-        assert first_event.identify_actor_given_id is None
-        assert first_event.identify_actor_name is None
-        assert first_event.identify_data is None
-
-        # Second event should have actor info
-        second_event = tool_events[1]
-        assert second_event.identify_actor_given_id == "user123"
-        assert second_event.identify_actor_name == "John Doe"
-        assert second_event.identify_data == {
-            "email": "john@example.com",
-            "role": "admin",
-        }
+        for event in tool_events[:2]:
+            assert event.identify_actor_given_id == "user123"
+            assert event.identify_actor_name == "John Doe"
+            assert event.identify_data == {
+                "email": "john@example.com",
+                "role": "admin",
+            }
 
     @pytest.mark.asyncio
     async def test_multiple_event_types_capture_all_fields(self):

@@ -20,6 +20,7 @@ from mcpcat.modules.exceptions import (
     store_captured_error,
 )
 from mcpcat.modules.internal import (
+    attach_event_metadata,
     get_original_method,
     get_server_tracking_data,
     is_tool_tracked,
@@ -237,6 +238,8 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                     current_data = mcpcat_data
 
                 # Handle session identification (non-critical)
+                request_context = None
+                mock_request = None
                 try:
                     request_context = safe_request_context(server._mcp_server)
                     client_name, client_version = (None, None)
@@ -301,6 +304,7 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                         client_name=client_name,
                         client_version=client_version,
                     )
+                    await attach_event_metadata(event, current_data, mock_request, request_context)
                 except Exception as e:
                     write_to_log(f"Error creating event: {e}")
                     event = None

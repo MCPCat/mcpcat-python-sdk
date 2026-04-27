@@ -9,6 +9,7 @@ from mcp.shared.context import RequestContext
 from mcpcat.modules import event_queue
 from mcpcat.modules.compatibility import is_mcp_error_response
 from mcpcat.modules.identify import identify_session
+from mcpcat.modules.internal import attach_event_metadata
 from mcpcat.modules.logging import write_to_log
 from mcpcat.modules.tools import handle_report_missing
 
@@ -62,6 +63,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             client_name=client_name,
             client_version=client_version,
         )
+        await attach_event_metadata(event, data, request, request_context)
 
         # Call the original handler
         result = await original_initialize_handler(request)
@@ -91,6 +93,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             client_name=client_name,
             client_version=client_version,
         )
+        await attach_event_metadata(event, data, request, request_context)
 
         # Call the original handler to get the tools
         original_result = await original_list_tools_handler(request)
@@ -177,6 +180,7 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
             client_name=client_name,
             client_version=client_version,
         )
+        await attach_event_metadata(event, data, request, request_context)
 
         # Extract user intent from context (but don't pop yet - we need it for the event)
         if data.options.enable_tool_call_context and tool_name != "get_more_tools":
@@ -267,6 +271,7 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
             client_name=client_name,
             client_version=client_version,
         )
+        await attach_event_metadata(event, data, request, request_context)
 
         # Call the original handler
         result = await original_initialize_handler(request)
@@ -296,6 +301,7 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
             client_name=client_name,
             client_version=client_version,
         )
+        await attach_event_metadata(event, data, request, request_context)
 
         # Call the original handler - tool modifications are handled by monkey-patch
         result = await original_list_tools_handler(request)

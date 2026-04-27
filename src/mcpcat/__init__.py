@@ -21,6 +21,8 @@ from .modules.compatibility import (
 from .modules.internal import set_server_tracking_data
 from .modules.logging import set_debug_mode, write_to_log
 from .types import (
+    EventPropertiesFunction,
+    EventTagsFunction,
     IdentifyFunction,
     MCPCatData,
     MCPCatOptions,
@@ -68,6 +70,18 @@ def track(
     Raises:
         ValueError: If neither project_id nor exporters are provided
         TypeError: If server is not a compatible MCP server instance
+
+    Example:
+        Attach custom metadata to every auto-captured event using
+        `event_tags` (string key-value pairs, validated) and
+        `event_properties` (flexible JSON). See
+        https://docs.mcpcat.io/sdk/event-tags-properties.
+
+        >>> import os, mcpcat
+        >>> mcpcat.track(server, "proj_abc123", mcpcat.MCPCatOptions(
+        ...     event_tags=lambda req, ctx: {"env": os.environ.get("APP_ENV", "dev")},
+        ...     event_properties=lambda req, ctx: {"feature_flags": ["dark_mode"]},
+        ... ))
     """
     if options is None:
         options = MCPCatOptions()
@@ -205,4 +219,7 @@ __all__ = [
     "IdentifyFunction",
     # Type for redaction functionality
     "RedactionFunction",
+    # Types for event metadata callbacks
+    "EventTagsFunction",
+    "EventPropertiesFunction",
 ]

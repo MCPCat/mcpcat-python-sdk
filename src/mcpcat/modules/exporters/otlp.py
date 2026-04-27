@@ -1,11 +1,13 @@
 """OpenTelemetry Protocol (OTLP) exporter for MCPCat telemetry."""
 
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
 
 from ...types import Event, OTLPExporterConfig
+from ...modules.constants import MCPCAT_SOURCE
 from ...modules.logging import write_to_log
 from . import Exporter
 from .trace_context import trace_context
@@ -171,7 +173,9 @@ class OTLPExporter(Exporter):
         Returns:
             List of attribute key-value pairs
         """
-        attributes = []
+        attributes: List[Dict[str, Any]] = [
+            {"key": "source", "value": {"stringValue": MCPCAT_SOURCE}},
+        ]
 
         # Add MCP-specific attributes
         if event.event_type:
@@ -232,6 +236,21 @@ class OTLPExporter(Exporter):
                 {
                     "key": "mcp.client_version",
                     "value": {"stringValue": event.client_version},
+                }
+            )
+
+        # Add customer-defined tags as individual attributes
+        for key, value in (getattr(event, "tags", None) or {}).items():
+            attributes.append(
+                {"key": f"mcpcat.tag.{key}", "value": {"stringValue": value}}
+            )
+
+        # Add customer-defined properties as JSON
+        if getattr(event, "properties", None):
+            attributes.append(
+                {
+                    "key": "mcpcat.properties",
+                    "value": {"stringValue": json.dumps(event.properties)},
                 }
             )
 

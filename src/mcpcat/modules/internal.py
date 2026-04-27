@@ -1,5 +1,6 @@
 """Internal data storage for MCPCat."""
 
+import inspect
 import weakref
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -7,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from ..types import EventType, MCPCatData, ToolRegistration, UnredactedEvent
 from .compatibility import is_official_fastmcp_server
 from .logging import write_to_log
+from .validation import validate_tags
 
 # WeakKeyDictionary to store data associated with server instances
 _server_data_map: weakref.WeakKeyDictionary[Any, MCPCatData] = (
@@ -116,6 +118,78 @@ def get_original_method(key: str) -> Optional[Any]:
 def get_original_methods() -> Dict[str, Any]:
     """Get the global original methods storage."""
     return _original_methods
+
+
+async def resolve_event_tags(
+    data: MCPCatData, request: Any, extra: Any
+) -> Optional[Dict[str, str]]:
+    """Resolve the event_tags callback and return validated tags.
+
+    Accepts sync or async callbacks. Returns None if no callback configured,
+    callback returns nullish, or callback raises.
+    """
+    callback = data.options.event_tags if data and data.options else None
+    if callback is None:
+        return None
+
+    try:
+        result = callback(request, extra)
+        if inspect.iscoroutine(result):
+            result = await result
+    except Exception as e:
+        write_to_log(f"event_tags callback error: {e}")
+        return None
+
+    if not result:
+        return None
+
+    return validate_tags(result)
+
+
+async def resolve_event_properties(
+    data: MCPCatData, request: Any, extra: Any
+) -> Optional[Dict[str, Any]]:
+    """Resolve the event_properties callback and return the result.
+
+    Accepts sync or async callbacks. Returns None if no callback configured,
+    callback returns nullish, or callback raises.
+    """
+    callback = data.options.event_properties if data and data.options else None
+    if callback is None:
+        return None
+
+    try:
+        result = callback(request, extra)
+        if inspect.iscoroutine(result):
+            result = await result
+    except Exception as e:
+        write_to_log(f"event_properties callback error: {e}")
+        return None
+
+    return result or None
+
+
+async def attach_event_metadata(
+    event: UnredactedEvent,
+    data: Optional[MCPCatData],
+    request: Any,
+    extra: Any,
+) -> None:
+    """Attach customer-defined tags and properties to an event before publish.
+
+    Safe no-op if data is None or callbacks are unset. Failures in either
+    callback are logged and swallowed — event is still published.
+    """
+    if data is None:
+        return
+
+    tags = await resolve_event_tags(data, request, extra)
+    if tags:
+        event.tags = tags
+
+    properties = await resolve_event_properties(data, request, extra)
+    if properties:
+        event.properties = properties
 
 
 def get_tool_timeline(server: Any) -> List[Dict[str, Any]]:

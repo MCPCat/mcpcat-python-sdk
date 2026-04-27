@@ -20,6 +20,8 @@ PROTECTED_FIELDS: Set[str] = {
     "resource_name",
     "event_type",
     "actor_id",
+    "tags",
+    "properties",
 }
 
 

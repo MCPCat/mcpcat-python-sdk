@@ -21,7 +21,7 @@ from mcpcat.modules.exceptions import (
     store_captured_error,
 )
 from mcpcat.modules.identify import identify_session
-from mcpcat.modules.internal import mark_tool_tracked, register_tool
+from mcpcat.modules.internal import attach_event_metadata, mark_tool_tracked, register_tool
 from mcpcat.modules.logging import write_to_log
 from mcpcat.modules.session import (
     get_client_info_from_request_context,
@@ -127,6 +127,7 @@ class MCPCatMiddleware:
             client_name=client_name,
             client_version=client_version,
         )
+        await attach_event_metadata(event, self.mcpcat_data, context.message, request_context)
 
         try:
             result = await call_next(context)
@@ -198,6 +199,7 @@ class MCPCatMiddleware:
             client_name=client_name,
             client_version=client_version,
         )
+        await attach_event_metadata(event, self.mcpcat_data, context.message, request_context)
 
         # Create modified context without context parameter if needed
         call_context = context
@@ -277,6 +279,7 @@ class MCPCatMiddleware:
             client_name=client_name,
             client_version=client_version,
         )
+        await attach_event_metadata(event, self.mcpcat_data, context.message, request_context)
 
         try:
             tools = list(await call_next(context))

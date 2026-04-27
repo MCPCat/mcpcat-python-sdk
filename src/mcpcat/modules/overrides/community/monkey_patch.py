@@ -14,7 +14,7 @@ from mcpcat.modules import event_queue
 from mcpcat.modules.compatibility import is_mcp_error_response
 from mcpcat.modules.exceptions import capture_exception
 from mcpcat.modules.identify import identify_session
-from mcpcat.modules.internal import get_server_tracking_data
+from mcpcat.modules.internal import attach_event_metadata, get_server_tracking_data
 from mcpcat.modules.logging import write_to_log
 from mcpcat.modules.session import (
     get_client_info_from_request_context,
@@ -128,6 +128,7 @@ def patch_community_fastmcp(server: Any) -> None:
                 client_name=client_name,
                 client_version=client_version,
             )
+            await attach_event_metadata(event, data, request, request_context)
 
             try:
                 # Handle get_more_tools specially - don't intercept for community FastMCP

@@ -55,6 +55,9 @@ asyncio_default_fixture_loop_scope = "function"
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+markers = [
+    "e2e: real HTTP transport tests (uvicorn-in-thread; ~25s overhead)",
+]
 
 [tool.mypy]
 python_version = "3.10"

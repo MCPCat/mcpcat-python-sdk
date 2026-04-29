@@ -26,7 +26,11 @@ def capture_queue() -> List[Any]:
 
     captured: List[Any] = []
     mock = MagicMock()
-    mock.publish_event = MagicMock(side_effect=lambda req: captured.append(req))
+
+    def capture_event(publish_event_request):
+        captured.append(publish_event_request)
+
+    mock.publish_event = MagicMock(side_effect=capture_event)
     set_event_queue(EventQueue(api_client=mock))
     yield captured
     set_event_queue(original)

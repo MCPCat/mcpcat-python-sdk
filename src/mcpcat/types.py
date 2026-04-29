@@ -204,7 +204,6 @@ class MCPCatData:
     session_id: str
     session_info: SessionInfo
     last_activity: datetime
-    identified_sessions: dict[str, UserIdentity]
     options: MCPCatOptions
 
     # Dynamic tracking fields (initialized on demand)

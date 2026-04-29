@@ -3,7 +3,6 @@
 import re
 import sys
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from mcp.shared.context import RequestContext
 from mcp.server import Server
@@ -12,7 +11,7 @@ from mcpcat.modules.constants import INACTIVITY_TIMEOUT_IN_MINUTES, SESSION_ID_P
 from mcpcat.modules.internal import get_server_tracking_data, set_server_tracking_data
 from mcpcat.modules.logging import write_to_log
 
-from ..types import MCPCatData, SessionInfo, UserIdentity
+from ..types import MCPCatData, SessionInfo
 from ..utils import generate_prefixed_ksuid
 
 
@@ -146,10 +145,6 @@ def get_client_info_from_request_context(
 
 def get_session_info(server: Server, data: MCPCatData | None = None) -> SessionInfo:
     """Get session information for the current MCP session."""
-    actor_info: Optional[UserIdentity] = None
-    if data and not data.is_stateless:
-        actor_info = data.identified_sessions.get(data.session_id, None)
-
     session_info = SessionInfo(
         ip_address=None,  # grab from django
         sdk_language=f"Python {sys.version_info.major}.{sys.version_info.minor}",
@@ -162,9 +157,9 @@ def get_session_info(server: Server, data: MCPCatData | None = None) -> SessionI
         client_version=data.session_info.client_version
         if data and data.session_info and not data.is_stateless
         else None,
-        identify_actor_given_id=actor_info.user_id if actor_info else None,
-        identify_actor_name=actor_info.user_name if actor_info else None,
-        identify_data=actor_info.user_data if actor_info else None,
+        identify_actor_given_id=None,
+        identify_actor_name=None,
+        identify_data=None,
     )
 
     if not data:

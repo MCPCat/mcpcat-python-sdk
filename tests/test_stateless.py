@@ -43,7 +43,6 @@ class TestStatelessMode:
             session_id="ses_existing123",
             session_info=SessionInfo(),
             last_activity=datetime.now(timezone.utc),
-            identified_sessions={},
             options=options,
             is_stateless=stateless,
         )
@@ -86,18 +85,8 @@ class TestStatelessMode:
         assert result.user_name == "Test User"
 
     @patch("mcpcat.modules.identify.event_queue")
-    def test_stateless_identify_no_shared_state(self, mock_event_queue):
-        """In stateless mode, identified_sessions should remain empty."""
-        self._setup_data(stateless=True, identify=_make_identify_fn())
-
-        identify_session(self.server, MagicMock(), MagicMock())
-
-        data = get_server_tracking_data(self.server)
-        assert data.identified_sessions == {}
-
-    @patch("mcpcat.modules.identify.event_queue")
-    def test_stateful_unchanged(self, mock_event_queue):
-        """Default (stateful) mode: session_id is a string, identify guard skips second call."""
+    def test_stateful_identify_runs_every_time(self, mock_event_queue):
+        """Stateful mode runs identify on every request."""
         mock_fn = MagicMock(return_value=UserIdentity(
             user_id="alice", user_name="Alice", user_data=None
         ))
@@ -108,13 +97,10 @@ class TestStatelessMode:
         assert isinstance(session_id, str)
         assert session_id.startswith("ses_")
 
-        # First identify call should work
         identify_session(self.server, MagicMock(), MagicMock())
-        assert mock_fn.call_count == 1
+        identify_session(self.server, MagicMock(), MagicMock())
 
-        # Second call should be skipped (early-return guard)
-        identify_session(self.server, MagicMock(), MagicMock())
-        assert mock_fn.call_count == 1
+        assert mock_fn.call_count == 2
 
     def test_track_stateless_true_sets_flag(self):
         """track() with stateless=True should set is_stateless on data."""

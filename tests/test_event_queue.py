@@ -546,7 +546,6 @@ class TestPublishEvent:
             session_id="session-123",
             session_info=SessionInfo(),
             last_activity=datetime.now(timezone.utc),
-            identified_sessions={},
             options=MCPCatOptions(redact_sensitive_information=None),
         )
         mock_tracking.return_value = mock_data
@@ -612,7 +611,6 @@ class TestPublishEvent:
             session_id="session-123",
             session_info=SessionInfo(),
             last_activity=datetime.now(timezone.utc),
-            identified_sessions={},
             options=MCPCatOptions(),
         )
         mock_tracking.return_value = mock_data
@@ -652,7 +650,6 @@ class TestPublishEvent:
             session_id="session-123",
             session_info=SessionInfo(),
             last_activity=datetime.now(timezone.utc),
-            identified_sessions={},
             options=MCPCatOptions(),
         )
         mock_tracking.return_value = mock_data
@@ -681,7 +678,6 @@ class TestPublishEvent:
             session_id="session-123",
             session_info=SessionInfo(),
             last_activity=datetime.now(timezone.utc),
-            identified_sessions={},
             options=MCPCatOptions(redact_sensitive_information=mock_redaction_fn),
         )
         mock_tracking.return_value = mock_data

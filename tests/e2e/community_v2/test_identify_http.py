@@ -18,7 +18,10 @@ pytestmark = pytest.mark.e2e
 
 
 def _set_identify(server, fn) -> None:
-    data = get_server_tracking_data(server)
+    # v2 stores tracking data against server._mcp_server (the lowlevel Server),
+    # not the FastMCP wrapper.
+    target = getattr(server, "_mcp_server", server)
+    data = get_server_tracking_data(target)
     assert data is not None
     data.options.identify = fn
 

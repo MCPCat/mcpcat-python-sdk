@@ -27,7 +27,6 @@ def _make_data(event_tags=None, event_properties=None) -> MCPCatData:
         session_id="ses_x",
         last_activity=None,
         session_info=SessionInfo(),
-        identified_sessions={},
         options=MCPCatOptions(
             event_tags=event_tags, event_properties=event_properties
         ),

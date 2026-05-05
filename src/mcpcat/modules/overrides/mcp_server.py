@@ -11,6 +11,7 @@ from mcpcat.modules.compatibility import is_mcp_error_response
 from mcpcat.modules.identify import identify_session
 from mcpcat.modules.internal import attach_event_metadata
 from mcpcat.modules.logging import write_to_log
+from mcpcat.modules.request_extra import params_with_extra
 from mcpcat.modules.tools import handle_report_missing
 
 from ...types import EventType, MCPCatData, UnredactedEvent
@@ -55,7 +56,10 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump() if request.params else {},
+            parameters=params_with_extra(
+                request.params.model_dump() if request.params else None,
+                request_context,
+            ),
             event_type=EventType.MCP_INITIALIZE.value,
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
@@ -83,9 +87,10 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump()
-            if request and request.params
-            else {},
+            parameters=params_with_extra(
+                request.params.model_dump() if request and request.params else None,
+                request_context,
+            ),
             event_type=EventType.MCP_TOOLS_LIST.value,
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
@@ -171,7 +176,10 @@ def override_lowlevel_mcp_server(server: Server, data: MCPCatData) -> None:
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump() if request.params else {},
+            parameters=params_with_extra(
+                request.params.model_dump() if request.params else None,
+                request_context,
+            ),
             event_type=EventType.MCP_TOOLS_CALL.value,
             resource_name=tool_name,
             identify_actor_given_id=identity.user_id if identity else None,
@@ -263,7 +271,10 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump() if request.params else {},
+            parameters=params_with_extra(
+                request.params.model_dump() if request.params else None,
+                request_context,
+            ),
             event_type=EventType.MCP_INITIALIZE.value,
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
@@ -291,9 +302,10 @@ def override_lowlevel_mcp_server_minimal(server: Server, data: MCPCatData) -> No
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters=request.params.model_dump()
-            if request and request.params
-            else {},
+            parameters=params_with_extra(
+                request.params.model_dump() if request and request.params else None,
+                request_context,
+            ),
             event_type=EventType.MCP_TOOLS_LIST.value,
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,

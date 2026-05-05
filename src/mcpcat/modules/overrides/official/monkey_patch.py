@@ -29,6 +29,7 @@ from mcpcat.modules.internal import (
     store_original_method,
 )
 from mcpcat.modules.logging import write_to_log
+from mcpcat.modules.request_extra import params_with_extra
 from mcpcat.modules.session import (
     get_client_info_from_request_context,
     get_server_session_id,
@@ -294,7 +295,10 @@ def patch_fastmcp_tool_manager(server: Any, mcpcat_data: MCPCatData) -> bool:
                     event = UnredactedEvent(
                         session_id=session_id,
                         timestamp=datetime.now(timezone.utc),
-                        parameters={"name": name, "arguments": arguments},
+                        parameters=params_with_extra(
+                            {"name": name, "arguments": arguments},
+                            request_context,
+                        ),
                         event_type=EventType.MCP_TOOLS_CALL.value,
                         resource_name=name,
                         user_intent=user_intent,

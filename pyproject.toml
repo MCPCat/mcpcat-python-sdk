@@ -55,6 +55,19 @@ asyncio_default_fixture_loop_scope = "function"
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+markers = [
+    "e2e: real HTTP transport tests (uvicorn-in-thread; ~25s overhead)",
+]
+filterwarnings = [
+    # Upstream-only DeprecationWarnings from uvicorn's websocket adapter and
+    # the `websockets` package's legacy submodule. They fire whenever uvicorn
+    # boots (every e2e test) and cannot be silenced from our code; they will
+    # disappear once uvicorn migrates off websockets.legacy. Each filter is
+    # scoped by emitting module so the same message from any other source
+    # would still surface. Format: action:message:category:module:lineno
+    "ignore:websockets\\.legacy is deprecated:DeprecationWarning:websockets.legacy",
+    "ignore:websockets\\.server\\.WebSocketServerProtocol is deprecated:DeprecationWarning:uvicorn.protocols.websockets.websockets_impl",
+]
 
 [tool.mypy]
 python_version = "3.10"

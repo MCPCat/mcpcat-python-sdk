@@ -23,6 +23,7 @@ from mcpcat.modules.exceptions import (
 from mcpcat.modules.identify import identify_session
 from mcpcat.modules.internal import attach_event_metadata, mark_tool_tracked, register_tool
 from mcpcat.modules.logging import write_to_log
+from mcpcat.modules.request_extra import params_with_extra
 from mcpcat.modules.session import (
     get_client_info_from_request_context,
     get_server_session_id,
@@ -119,7 +120,11 @@ class MCPCatMiddleware:
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters=params.model_dump() if params else {},
+            parameters=params_with_extra(
+                params.model_dump() if params else None,
+                request_context,
+                context.fastmcp_context,
+            ),
             event_type=EventType.MCP_INITIALIZE.value,
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,
@@ -189,7 +194,11 @@ class MCPCatMiddleware:
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters={"name": tool_name, "arguments": arguments},
+            parameters=params_with_extra(
+                {"name": tool_name, "arguments": arguments},
+                request_context,
+                context.fastmcp_context,
+            ),
             event_type=EventType.MCP_TOOLS_CALL.value,
             resource_name=tool_name,
             user_intent=user_intent,
@@ -271,7 +280,11 @@ class MCPCatMiddleware:
         event = UnredactedEvent(
             session_id=session_id,
             timestamp=datetime.now(timezone.utc),
-            parameters=params.model_dump() if params else {},
+            parameters=params_with_extra(
+                params.model_dump() if params else None,
+                request_context,
+                context.fastmcp_context,
+            ),
             event_type=EventType.MCP_TOOLS_LIST.value,
             identify_actor_given_id=identity.user_id if identity else None,
             identify_actor_name=identity.user_name if identity else None,

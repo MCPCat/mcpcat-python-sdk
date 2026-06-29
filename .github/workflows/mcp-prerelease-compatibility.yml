@@ -103,9 +103,14 @@ jobs:
 
     - name: Install dependencies with prerelease FastMCP ${{ matrix.fastmcp-version }}
       run: |
-        # Install with both dev and community extras, allow prereleases
-        # FastMCP will determine which MCP version it needs
-        uv sync --extra dev --extra community --prerelease if-necessary-or-explicit
+        # Install with both dev and community extras, allow prereleases.
+        # FastMCP will determine which MCP version it needs.
+        # Use --prerelease=allow (not if-necessary-or-explicit): FastMCP 3.4+
+        # splits into fastmcp + a transitive fastmcp-slim package. Pinning a
+        # prerelease fastmcp pulls a matching prerelease fastmcp-slim that is
+        # not named in our pyproject, so if-necessary-or-explicit refuses it
+        # and resolution fails. "allow" is correct for a prerelease-testing job.
+        uv sync --extra dev --extra community --prerelease allow
 
     - name: Show installed versions
       run: |

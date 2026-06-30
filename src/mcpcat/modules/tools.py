@@ -30,6 +30,10 @@ if TYPE_CHECKING or has_fastmcp_support():
 
 async def handle_report_missing(arguments: dict[str, Any]) -> CallToolResult:
     """Handle the report_missing tool."""
+    # Metadata-only diagnostics: log the context length, never the context text.
+    write_to_log(
+        f"Missing tool reported (context length: {len(arguments.get('context', ''))})"
+    )
     return CallToolResult(
         content=[
             TextContent(

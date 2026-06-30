@@ -159,10 +159,10 @@ class EventQueue:
             # Synchronous API call
             self.api_client.publish_event(publish_event_request=event)
             write_to_log(
-                f"Successfully sent event {event.id} | {event.event_type} | {event.project_id} | "
+                f"Successfully sent event {event.id} | {event.event_type} | "
+                f"session {event.session_id} | {event.project_id} | "
                 f"{event.duration} ms | {event.identify_actor_given_id or 'anonymous'}"
             )
-            write_to_log(f"Event details: {event.model_dump_json()}")
         except Exception as error:
             if self._shutdown_event.is_set():
                 write_to_log(
@@ -222,6 +222,15 @@ class EventQueue:
         remaining = self.queue.qsize()
         if remaining > 0:
             write_to_log(f"Shutdown complete. {remaining} events were not processed.")
+
+        # Flush any buffered SDK diagnostics on the way out. Lazy import to avoid
+        # an import cycle; never let diagnostics break shutdown.
+        try:
+            from mcpcat.modules.diagnostics import flush_diagnostics
+
+            flush_diagnostics()
+        except Exception:
+            pass
 
 
 # Global telemetry manager instance (optional)

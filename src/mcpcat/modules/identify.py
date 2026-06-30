@@ -21,7 +21,8 @@ def identify_session(server, request: any, context: any) -> UserIdentity | None:
         identify_result = data.options.identify(request, context)
         if not identify_result or not isinstance(identify_result, UserIdentity):
             write_to_log(
-                f"User identification function did not return a valid UserIdentity instance. Received: {identify_result}"
+                "User identification function did not return a valid UserIdentity "
+                f"instance. Received type: {type(identify_result).__name__}"
             )
             return None
 

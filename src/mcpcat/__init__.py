@@ -18,6 +18,7 @@ from .modules.compatibility import (
     is_compatible_server,
     is_official_fastmcp_server,
 )
+from .modules.diagnostics import init_diagnostics
 from .modules.internal import set_server_tracking_data
 from .modules.logging import set_debug_mode, write_to_log
 from .types import (
@@ -88,57 +89,77 @@ def track(
 
     set_debug_mode(options.debug_mode)
 
-    if not project_id and not options.exporters:
-        raise ValueError(
-            "Either project_id or exporters must be provided. "
-            "Use project_id for MCPCat, exporters for telemetry-only mode, or both."
-        )
+    # Initialize internal diagnostics before anything can fail, so even an
+    # invalid setup still emits a failure beacon. Never throws into the host.
+    init_diagnostics(project_id, disabled=options.disable_diagnostics)
 
-    if not is_compatible_server(server):
-        raise TypeError(COMPATIBILITY_ERROR_MESSAGE)
-
-    is_community_v3 = is_community_fastmcp_v3(server)
-    is_community_v2 = is_community_fastmcp_v2(server)
-    is_official_fastmcp = is_official_fastmcp_server(server)
-    is_fastmcp_v2 = is_official_fastmcp or is_community_v2
-
-    # Determine where to store tracking data:
-    # - v2 FastMCP servers use server._mcp_server
-    # - v3 and low-level servers use the server itself
-    if is_fastmcp_v2:
-        lowlevel_server = server._mcp_server
-    else:
-        lowlevel_server = server
-
-    if options.exporters:
-        from mcpcat.modules.event_queue import set_telemetry_manager
-        from mcpcat.modules.telemetry import TelemetryManager
-
-        telemetry_manager = TelemetryManager(options.exporters)
-        set_telemetry_manager(telemetry_manager)
-        write_to_log(
-            f"Telemetry initialized with {len(options.exporters)} exporter(s)"
-        )
-
-    session_id = new_session_id()
-    session_info = get_session_info(lowlevel_server)
-    data = MCPCatData(
-        session_id=session_id,
-        project_id=project_id,
-        last_activity=datetime.now(timezone.utc),
-        session_info=session_info,
-        options=options,
-        is_stateless=options.stateless if options.stateless is not None else _detect_stateless(server),
-    )
-    set_server_tracking_data(lowlevel_server, data)
-
-    # Resolve API base URL: option > env var > default
-    api_base_url = options.api_base_url or os.environ.get("MCPCAT_API_URL")
-    if api_base_url:
-        from mcpcat.modules.event_queue import event_queue
-        event_queue.configure(api_base_url)
-
+    # Wrap the whole setup so any failure emits a diagnostic. Config-contract
+    # errors (ValueError/TypeError) still propagate; tracking-application errors
+    # are logged but never break the host (server is still returned).
     try:
+        if not project_id and not options.exporters:
+            raise ValueError(
+                "Either project_id or exporters must be provided. "
+                "Use project_id for MCPCat, exporters for telemetry-only mode, or both."
+            )
+
+        if not is_compatible_server(server):
+            raise TypeError(COMPATIBILITY_ERROR_MESSAGE)
+
+        is_community_v3 = is_community_fastmcp_v3(server)
+        is_community_v2 = is_community_fastmcp_v2(server)
+        is_official_fastmcp = is_official_fastmcp_server(server)
+        is_fastmcp_v2 = is_official_fastmcp or is_community_v2
+
+        # Determine where to store tracking data:
+        # - v2 FastMCP servers use server._mcp_server
+        # - v3 and low-level servers use the server itself
+        if is_fastmcp_v2:
+            lowlevel_server = server._mcp_server
+        else:
+            lowlevel_server = server
+
+        # Metadata-only setup-started beacon (INFO — no fail/error/Warning).
+        server_kind = (
+            "fastmcp-v2"
+            if is_fastmcp_v2
+            else "fastmcp-v3"
+            if is_community_v3
+            else "lowlevel"
+        )
+        write_to_log(
+            f"MCPCat setup started | project {project_id or '(telemetry-only)'} | "
+            f"server {server_kind}"
+        )
+
+        if options.exporters:
+            from mcpcat.modules.event_queue import set_telemetry_manager
+            from mcpcat.modules.telemetry import TelemetryManager
+
+            telemetry_manager = TelemetryManager(options.exporters)
+            set_telemetry_manager(telemetry_manager)
+            write_to_log(
+                f"Telemetry initialized with {len(options.exporters)} exporter(s)"
+            )
+
+        session_id = new_session_id()
+        session_info = get_session_info(lowlevel_server)
+        data = MCPCatData(
+            session_id=session_id,
+            project_id=project_id,
+            last_activity=datetime.now(timezone.utc),
+            session_info=session_info,
+            options=options,
+            is_stateless=options.stateless if options.stateless is not None else _detect_stateless(server),
+        )
+        set_server_tracking_data(lowlevel_server, data)
+
+        # Resolve API base URL: option > env var > default
+        api_base_url = options.api_base_url or os.environ.get("MCPCAT_API_URL")
+        if api_base_url:
+            from mcpcat.modules.event_queue import event_queue
+            event_queue.configure(api_base_url)
+
         if not data.tracker_initialized:
             data.tracker_initialized = True
             write_to_log(
@@ -160,6 +181,21 @@ def track(
                 f"MCPCat initialized in telemetry-only mode for session {session_id}"
             )
 
+        # Metadata-only setup-complete beacon (INFO). A start-without-complete
+        # (or the ERROR diagnostics below) signals a failed setup.
+        write_to_log(
+            f"MCPCat setup complete | project {project_id or '(telemetry-only)'} | "
+            f"tracing={options.enable_tracing} "
+            f"context={options.enable_tool_call_context} "
+            f"report_missing={options.enable_report_missing} "
+            f"exporters={len(options.exporters) if options.exporters else 0}"
+        )
+
+    except (ValueError, TypeError) as e:
+        # Config-contract failures: emit a failure diagnostic, then propagate so
+        # callers still see the error (preserves existing public behavior).
+        write_to_log(f"Warning: Failed to track server - {e}")
+        raise
     except Exception as e:
         write_to_log(f"Error initializing MCPCat: {e}")
 

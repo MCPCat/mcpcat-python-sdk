@@ -265,6 +265,30 @@ class TestEventQueue:
         assert mock_log.call_count >= 1  # At least one success log
 
     @patch("mcpcat.modules.event_queue.write_to_log")
+    def test_send_event_success_logs_session_not_payload(self, mock_log):
+        """Success log carries session metadata, never a serialized payload."""
+        eq = EventQueue()
+        eq.api_client = MagicMock()
+
+        event = Event(
+            id="evt-1",
+            event_type="mcp:tools/call",
+            project_id="proj-1",
+            session_id="ses-secret-123",
+            timestamp=datetime.now(timezone.utc),
+            duration=42,
+            identify_actor_given_id="actor-1",
+        )
+
+        eq._send_event(event)
+
+        logged = "\n".join(str(c.args[0]) for c in mock_log.call_args_list)
+        assert "session ses-secret-123" in logged
+        # The full-payload dump was removed for privacy.
+        assert "Event details" not in logged
+        assert "model_dump_json" not in logged
+
+    @patch("mcpcat.modules.event_queue.write_to_log")
     def test_send_event_with_retries(self, mock_log):
         """Test sending event with retries on failure."""
         eq = EventQueue()

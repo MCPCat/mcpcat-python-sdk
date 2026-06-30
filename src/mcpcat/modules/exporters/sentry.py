@@ -105,9 +105,8 @@ class SentryExporter(Exporter):
             )
 
             if not log_response.ok:
-                error_body = log_response.text
                 write_to_log(
-                    f"Sentry log export failed - Status: {log_response.status_code}, Body: {error_body}"
+                    f"Sentry log export failed - Status: {log_response.status_code}"
                 )
             else:
                 write_to_log(f"Sentry log export success - Event: {event.id}")
@@ -132,9 +131,8 @@ class SentryExporter(Exporter):
                 )
 
                 if not transaction_response.ok:
-                    error_body = transaction_response.text
                     write_to_log(
-                        f"Sentry transaction export failed - Status: {transaction_response.status_code}, Body: {error_body}"
+                        f"Sentry transaction export failed - Status: {transaction_response.status_code}"
                     )
                 else:
                     write_to_log(
@@ -165,9 +163,8 @@ class SentryExporter(Exporter):
                 )
 
                 if not error_response.ok:
-                    error_body = error_response.text
                     write_to_log(
-                        f"Sentry error export failed - Status: {error_response.status_code}, Body: {error_body}"
+                        f"Sentry error export failed - Status: {error_response.status_code}"
                     )
                 else:
                     write_to_log(f"Sentry error export success - Event: {event.id}")

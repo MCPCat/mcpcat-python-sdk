@@ -65,11 +65,9 @@ class DatadogExporter(Exporter):
         log = self.event_to_log(event)
         metrics = self.event_to_metrics(event)
 
-        # Debug: Log the metrics payload
+        # Debug: Log the metrics payload (metadata only — count, not contents)
         write_to_log(f"DatadogExporter: Metrics URL: {self.metrics_url}")
-        write_to_log(
-            f"DatadogExporter: Metrics payload: {json.dumps({'series': metrics})}"
-        )
+        write_to_log(f"DatadogExporter: Sending {len(metrics)} metric series")
 
         # Send logs and metrics synchronously
         self._send_logs([log])
@@ -89,9 +87,8 @@ class DatadogExporter(Exporter):
             )
 
             if not response.ok:
-                error_body = response.text
                 write_to_log(
-                    f"Datadog logs failed - Status: {response.status_code}, Body: {error_body}"
+                    f"Datadog logs failed - Status: {response.status_code}"
                 )
             else:
                 write_to_log(f"Datadog logs success - Status: {response.status_code}")
@@ -112,14 +109,12 @@ class DatadogExporter(Exporter):
             )
 
             if not response.ok:
-                error_body = response.text
                 write_to_log(
-                    f"Datadog metrics failed - Status: {response.status_code}, Body: {error_body}"
+                    f"Datadog metrics failed - Status: {response.status_code}"
                 )
             else:
-                response_body = response.text
                 write_to_log(
-                    f"Datadog metrics success - Status: {response.status_code}, Body: {response_body}"
+                    f"Datadog metrics success - Status: {response.status_code}"
                 )
         except Exception as err:
             write_to_log(f"Datadog metrics network error: {err}")

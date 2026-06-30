@@ -11,3 +11,12 @@ MAX_EXCEPTION_CHAIN_DEPTH = 10
 
 # Maximum number of stack frames to capture per exception
 MAX_STACK_FRAMES = 50
+
+# Internal SDK diagnostics (privacy-first, metadata-only OTLP logs)
+DIAGNOSTICS_SCOPE_NAME = "mcpcat-diagnostics"
+DEFAULT_DIAGNOSTICS_ENDPOINT = "https://otel.agentcat.com"
+# Public shared ingestion key — NOT a secret; ships in the package to deter
+# drive-by traffic, paired with a server-side rate limit. Override with the
+# DIAGNOSTICS_TOKEN env var. Must match the collector's bearer token (same
+# literal as the TypeScript SDK).
+DEFAULT_DIAGNOSTICS_TOKEN = "dgk_sdk_diag_3f9a2c7e1b8d4065af2e9c1d7b6a4f80"

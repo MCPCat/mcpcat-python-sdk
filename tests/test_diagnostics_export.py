@@ -11,7 +11,8 @@ from mcpcat.modules.logging import write_to_log
 @pytest.fixture(autouse=True)
 def reset(monkeypatch):
     diagnostics._reset_diagnostics_for_test()
-    monkeypatch.delenv("DISABLE_DIAGNOSTICS", raising=False)
+    # Force-enable past the test-environment auto-disable; HTTP is mocked.
+    monkeypatch.setenv("DISABLE_DIAGNOSTICS", "false")
     monkeypatch.delenv("DIAGNOSTICS_ENDPOINT", raising=False)
     yield
     diagnostics._reset_diagnostics_for_test()

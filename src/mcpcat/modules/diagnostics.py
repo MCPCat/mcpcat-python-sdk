@@ -9,7 +9,9 @@ anonymous install-id hash when none) plus a metadata-only message body. The loca
 ``~/mcpcat.log`` is unaffected.
 
 On by default; opt out via ``MCPCatOptions(disable_diagnostics=True)`` or the
-``DISABLE_DIAGNOSTICS`` env var. Nothing here ever throws into the host, and the
+``DISABLE_DIAGNOSTICS`` env var. Auto-disabled in test environments
+(``PYTEST_CURRENT_TEST`` / ``PYTEST_VERSION`` set) unless explicitly force-enabled
+with ``DISABLE_DIAGNOSTICS=false``. Nothing here ever throws into the host, and the
 fire-and-forget HTTP export runs on a daemon thread so it never blocks process exit.
 
 Override the collector with ``DIAGNOSTICS_ENDPOINT`` / ``DIAGNOSTICS_TOKEN``.
@@ -75,19 +77,40 @@ def _resolve_token() -> str:
         return DEFAULT_DIAGNOSTICS_TOKEN
 
 
-def _env_disabled() -> bool:
+def _is_test_environment() -> bool:
+    """True when running under pytest (``PYTEST_CURRENT_TEST`` / ``PYTEST_VERSION``).
+
+    Diagnostics auto-disable here so no test suite — ours or a consumer's — ever
+    ships OTLP metadata to the live collector. Never throws.
+    """
+    try:
+        return bool(
+            os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("PYTEST_VERSION")
+        )
+    except Exception:
+        return False
+
+
+def _env_diagnostics_flag() -> str:
     """Interpret ``DISABLE_DIAGNOSTICS`` by value, not mere presence.
 
-    ``false`` / ``0`` / ``no`` / ``off`` / empty (and whitespace) stay enabled;
-    anything else disables. Mirrors the ``MCPCAT_DEBUG_MODE`` idiom in logging.py.
+    Returns one of:
+    - ``"unset"``: env var unset, empty, or whitespace-only (default behavior).
+    - ``"force-enabled"``: ``false`` / ``0`` / ``no`` / ``off`` — a deliberate
+      opt-in that overrides the test-environment auto-disable.
+    - ``"disabled"``: anything else disables diagnostics.
+
+    Mirrors the ``MCPCAT_DEBUG_MODE`` idiom in logging.py.
     """
     try:
         raw = os.environ.get("DISABLE_DIAGNOSTICS")
-        if not raw:
-            return False
-        return raw.strip().lower() not in ("false", "0", "no", "off", "")
+        if not raw or not raw.strip():
+            return "unset"
+        if raw.strip().lower() in ("false", "0", "no", "off"):
+            return "force-enabled"
+        return "disabled"
     except Exception:
-        return False
+        return "unset"
 
 
 # --- Record construction ------------------------------------------------------
@@ -256,7 +279,15 @@ def init_diagnostics(project_id: str | None, disabled: bool = False) -> None:
         if _initialized:
             return
         _initialized = True
-        _enabled = (not disabled) and not _env_disabled()
+        # Off when opted out (option or env), and off in test environments unless
+        # explicitly force-enabled (DISABLE_DIAGNOSTICS=false) — so no test run,
+        # ours or a consumer's, ever ships diagnostics to the live collector.
+        flag = _env_diagnostics_flag()
+        _enabled = (
+            (not disabled)
+            and flag != "disabled"
+            and (flag == "force-enabled" or not _is_test_environment())
+        )
         if not _enabled:
             return
         _static_attributes = _build_static_attributes(project_id)
